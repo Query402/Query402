@@ -6,6 +6,7 @@ import { paidRouter } from "./routes/demo.js";
 import { createX402Middleware } from "./lib/x402.js";
 import { logger } from "./lib/logger.js";
 import { config } from "./lib/config.js";
+import { UnsafeScrapeUrlError } from "./lib/scrape-url-safety.js";
 
 export const app = express();
 
@@ -57,6 +58,14 @@ app.use(protectedRouter);
 app.use(paidRouter);
 
 app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof UnsafeScrapeUrlError) {
+    res.status(400).json({
+      error: "Scrape URL is not allowed",
+      type: "unsafe_scrape_url"
+    });
+    return;
+  }
+
   res.status(500).json({
     error: error.message,
     type: "internal_error"

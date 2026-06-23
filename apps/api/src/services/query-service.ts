@@ -2,6 +2,7 @@ import { getProviderById, providers } from "../lib/pricing.js";
 import { runSearchProvider } from "../providers/search.js";
 import { runNewsProvider } from "../providers/news.js";
 import { runScrapeProvider } from "../providers/scrape.js";
+import { validateScrapeUrl } from "../lib/scrape-url-safety.js";
 
 export async function executeQuery(params: {
   mode: "search" | "news" | "scrape";
@@ -36,7 +37,8 @@ export async function executeQuery(params: {
     throw new Error("url is required for scrape mode");
   }
 
-  return runScrapeProvider(params.url, params.provider);
+  const safeUrl = await validateScrapeUrl(params.url);
+  return runScrapeProvider(safeUrl, params.provider);
 }
 
 export function getCatalog() {
