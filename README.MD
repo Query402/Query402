@@ -139,6 +139,7 @@ Run the same checks locally that CI enforces on pull requests:
 
 ```bash
 npm ci
+npm run clean
 npm run typecheck
 npm run build
 npm run test
@@ -146,6 +147,8 @@ npm run lint
 npm run format:check
 npm run check:source-artifacts
 ```
+
+Use `npm run clean` before quality gates when you want to remove local build output (`dist`), test coverage (`coverage`), and API runtime data under `apps/api/data`.
 
 CI uses the Node version from `.nvmrc`, installs dependencies with `npm ci`, and does not require credentials or live Stellar payments.
 
