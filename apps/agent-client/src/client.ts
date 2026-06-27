@@ -31,6 +31,15 @@ export function buildPaidQueryEndpoint(input: {
   return `${baseUrl}/x402/${input.mode}?${params.toString()}`;
 }
 
+function isNetworkFailure(error: unknown) {
+  return error instanceof TypeError || error instanceof DOMException;
+}
+
+function formatNetworkFailure(error: unknown, apiBaseUrl: string) {
+  const detail = error instanceof Error && error.message ? ` Details: ${error.message}` : "";
+  return `Unable to reach Query402 API at ${apiBaseUrl}. Check API_BASE_URL and confirm the API server is running.${detail}`;
+}
+
 export async function runPaidQuery(input: {
   mode: "search" | "news" | "scrape";
   provider: string;
@@ -38,6 +47,7 @@ export async function runPaidQuery(input: {
   url?: string;
 }) {
   const endpoint = buildPaidQueryEndpoint(input);
+  const apiBaseUrl = config.API_BASE_URL;
   const idempotencyKey = getIdempotencyKey(
     buildPaidClientRequestKey({
       route: `/x402/${input.mode}`,
@@ -50,38 +60,46 @@ export async function runPaidQuery(input: {
   );
   const isDemoMode = config.DEMO_MODE === "true";
 
-  const response = isDemoMode
-    ? await fetch(endpoint, {
-        method: "GET",
-        headers: {
-          "x-query402-demo-paid": "true",
-          "payment-response": `demo_tx_${nanoid(10)}`,
-          "Idempotency-Key": idempotencyKey
-        }
-      })
-    : await (async () => {
-        if (!config.DEMO_CLIENT_SECRET_KEY) {
-          throw new Error("DEMO_CLIENT_SECRET_KEY is required when DEMO_MODE is false");
-        }
-
-        const signer = createEd25519Signer(
-          config.DEMO_CLIENT_SECRET_KEY,
-          config.STELLAR_NETWORK as `${string}:${string}`
-        );
-
-        const client = new x402Client().register(
-          "stellar:*",
-          new ExactStellarScheme(signer, { url: config.STELLAR_RPC_URL })
-        );
-
-        const fetchWithPayment = wrapFetchWithPayment(fetch, client);
-        return fetchWithPayment(endpoint, {
+  let response: Response;
+  try {
+    response = isDemoMode
+      ? await fetch(endpoint, {
           method: "GET",
           headers: {
+            "x-query402-demo-paid": "true",
+            "payment-response": `demo_tx_${nanoid(10)}`,
             "Idempotency-Key": idempotencyKey
           }
-        });
-      })();
+        })
+      : await (async () => {
+          if (!config.DEMO_CLIENT_SECRET_KEY) {
+            throw new Error("DEMO_CLIENT_SECRET_KEY is required when DEMO_MODE is false");
+          }
+
+          const signer = createEd25519Signer(
+            config.DEMO_CLIENT_SECRET_KEY,
+            config.STELLAR_NETWORK as `${string}:${string}`
+          );
+
+          const client = new x402Client().register(
+            "stellar:*",
+            new ExactStellarScheme(signer, { url: config.STELLAR_RPC_URL })
+          );
+
+          const fetchWithPayment = wrapFetchWithPayment(fetch, client);
+          return fetchWithPayment(endpoint, {
+            method: "GET",
+            headers: {
+              "Idempotency-Key": idempotencyKey
+            }
+          });
+        })();
+  } catch (error) {
+    if (isNetworkFailure(error)) {
+      throw new Error(formatNetworkFailure(error, apiBaseUrl), { cause: error });
+    }
+    throw error;
+  }
 
   const json = await response.json();
 

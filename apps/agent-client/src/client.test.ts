@@ -7,6 +7,7 @@ describe("buildPaidQueryEndpoint", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -76,6 +77,7 @@ describe("runPaidQuery error handling", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -90,5 +92,50 @@ describe("runPaidQuery error handling", () => {
         query: "stellar"
       })
     ).rejects.toThrow("DEMO_CLIENT_SECRET_KEY is required when DEMO_MODE is false");
+  });
+
+  it("reports unreachable API hosts with the configured base URL in demo mode", async () => {
+    process.env.API_BASE_URL = "http://127.0.0.1:65535";
+    process.env.DEMO_MODE = "true";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+    const { runPaidQuery } = await import("./client.js");
+
+    await expect(
+      runPaidQuery({
+        mode: "search",
+        provider: "search.basic",
+        query: "stellar"
+      })
+    ).rejects.toThrow(
+      "Unable to reach Query402 API at http://127.0.0.1:65535. Check API_BASE_URL and confirm the API server is running. Details: fetch failed"
+    );
+  });
+
+  it("does not hide HTTP error responses from the API", async () => {
+    process.env.DEMO_MODE = "true";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "payment required" }), {
+          status: 402,
+          headers: {
+            "content-type": "application/json"
+          }
+        })
+      )
+    );
+    const { runPaidQuery } = await import("./client.js");
+
+    const result = await runPaidQuery({
+      mode: "search",
+      provider: "search.basic",
+      query: "stellar"
+    });
+
+    expect(result).toMatchObject({
+      status: 402,
+      ok: false,
+      body: { error: "payment required" }
+    });
   });
 });
