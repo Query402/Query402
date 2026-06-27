@@ -57,6 +57,7 @@ export default function ControlDeckPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>(modeDefaultProvider.search);
   const [result, setResult] = useState<PaidQueryResponse | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sponsorshipEnabled, setSponsorshipEnabled] = useState(false);
@@ -101,9 +102,17 @@ export default function ControlDeckPage() {
   }
 
   async function refreshMetrics() {
-    const data = await fetchJson<AnalyticsResponse>(`${API_BASE_URL}/api/analytics`);
-    setAnalytics(data);
+    setIsAnalyticsLoading(true);
+    try {
+      const data = await fetchJson<AnalyticsResponse>(`${API_BASE_URL}/api/analytics`);
+      setAnalytics(data);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
   }
+
+  const showAnalyticsSkeleton = isAnalyticsLoading && analytics === null;
+  const hasUsageHistory = (analytics?.totalQueries ?? 0) > 0;
 
   useEffect(() => {
     async function bootstrap() {
@@ -239,21 +248,25 @@ export default function ControlDeckPage() {
             label="Queries"
             value={String(analytics?.totalQueries ?? 0)}
             icon={<Activity size={16} />}
+            isLoading={showAnalyticsSkeleton}
           />
           <StatTile
             label="Spend"
             value={money(analytics?.totalSpendUsd ?? 0)}
             icon={<CircleDollarSign size={16} />}
+            isLoading={showAnalyticsSkeleton}
           />
           <StatTile
             label="Search"
             value={money(analytics?.spendByCategory.search ?? 0)}
             icon={<Radar size={16} />}
+            isLoading={showAnalyticsSkeleton}
           />
           <StatTile
             label="News"
             value={money(analytics?.spendByCategory.news ?? 0)}
             icon={<ReceiptText size={16} />}
+            isLoading={showAnalyticsSkeleton}
           />
         </div>
       </header>
@@ -439,57 +452,90 @@ export default function ControlDeckPage() {
           <div className="orbital">
             <div className="orbital-center">
               <Gauge size={20} />
-              <p>{money(analytics?.totalSpendUsd ?? 0)}</p>
-              <span>Total spend</span>
+              {showAnalyticsSkeleton ? (
+                <>
+                  <span className="analytics-skeleton analytics-skeleton--orbital" />
+                  <span className="analytics-skeleton analytics-skeleton--caption" />
+                </>
+              ) : (
+                <>
+                  <p>{money(analytics?.totalSpendUsd ?? 0)}</p>
+                  <span>Total spend</span>
+                </>
+              )}
             </div>
           </div>
 
           <div className="analytics-panel">
             <h3>Spend by category</h3>
-            <ul>
-              <li>
-                <span>Search</span>
-                <strong>{money(analytics?.spendByCategory.search ?? 0)}</strong>
-              </li>
-              <li>
-                <span>News</span>
-                <strong>{money(analytics?.spendByCategory.news ?? 0)}</strong>
-              </li>
-              <li>
-                <span>Scrape</span>
-                <strong>{money(analytics?.spendByCategory.scrape ?? 0)}</strong>
-              </li>
-            </ul>
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : !hasUsageHistory ? (
+              <p className="panel-empty-note">
+                No spend recorded yet. Run a paid query to see category breakdown.
+              </p>
+            ) : (
+              <ul>
+                <li>
+                  <span>Search</span>
+                  <strong>{money(analytics!.spendByCategory.search)}</strong>
+                </li>
+                <li>
+                  <span>News</span>
+                  <strong>{money(analytics!.spendByCategory.news)}</strong>
+                </li>
+                <li>
+                  <span>Scrape</span>
+                  <strong>{money(analytics!.spendByCategory.scrape)}</strong>
+                </li>
+              </ul>
+            )}
           </div>
 
           <div className="feed-panel">
             <h3>Recent transactions</h3>
-            {(analytics?.recentTransactions ?? []).slice(0, 5).map((tx) => (
-              <div key={tx.id} className="feed-row">
-                <p>
-                  <span>{tx.providerId}</span>
-                  <strong>{money(tx.amountUsd)}</strong>
-                </p>
-                <small>{new Date(tx.createdAt).toLocaleString()}</small>
-              </div>
-            ))}
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : (analytics?.recentTransactions ?? []).length === 0 ? (
+              <p className="panel-empty-note">
+                No payments yet. Your x402 settlement history will show up here.
+              </p>
+            ) : (
+              analytics!.recentTransactions.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="feed-row">
+                  <p>
+                    <span>{tx.providerId}</span>
+                    <strong>{money(tx.amountUsd)}</strong>
+                  </p>
+                  <small>{new Date(tx.createdAt).toLocaleString()}</small>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="feed-panel">
             <h3>Execution feed</h3>
-            {(analytics?.recentUsage ?? []).slice(0, 5).map((usage) => (
-              <div key={usage.id} className="feed-row">
-                <p>
-                  <span>
-                    {usage.mode.toUpperCase()} · {usage.providerId}
-                  </span>
-                  <strong>{usage.latencyMs}ms</strong>
-                </p>
-                <small>
-                  {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
-                </small>
-              </div>
-            ))}
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : (analytics?.recentUsage ?? []).length === 0 ? (
+              <p className="panel-empty-note">
+                No executions yet. Query runs and latency traces will appear here.
+              </p>
+            ) : (
+              analytics!.recentUsage.slice(0, 5).map((usage) => (
+                <div key={usage.id} className="feed-row">
+                  <p>
+                    <span>
+                      {usage.mode.toUpperCase()} · {usage.providerId}
+                    </span>
+                    <strong>{usage.latencyMs}ms</strong>
+                  </p>
+                  <small>
+                    {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
+                  </small>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="script-panel">
@@ -514,14 +560,33 @@ export default function ControlDeckPage() {
   );
 }
 
-function StatTile(props: { label: string; value: string; icon: ReactNode }) {
+function StatTile(props: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  isLoading?: boolean;
+}) {
   return (
     <div className="stat-tile">
       <p>
         {props.icon}
         {props.label}
       </p>
-      <strong>{props.value}</strong>
+      {props.isLoading ? (
+        <span className="analytics-skeleton analytics-skeleton--value" />
+      ) : (
+        <strong>{props.value}</strong>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsSkeletonRows(props: { count: number }) {
+  return (
+    <div className="analytics-skeleton-rows">
+      {Array.from({ length: props.count }, (_, index) => (
+        <span key={index} className="analytics-skeleton analytics-skeleton--row" />
+      ))}
     </div>
   );
 }
