@@ -560,12 +560,7 @@ export default function ControlDeckPage() {
   );
 }
 
-function StatTile(props: {
-  label: string;
-  value: string;
-  icon: ReactNode;
-  isLoading?: boolean;
-}) {
+function StatTile(props: { label: string; value: string; icon: ReactNode; isLoading?: boolean }) {
   return (
     <div className="stat-tile">
       <p>
