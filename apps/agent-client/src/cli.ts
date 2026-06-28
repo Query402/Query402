@@ -22,12 +22,23 @@ async function main() {
   const modeArg = args[0];
   const term = args[1];
 
-  if (!modeArg || !term || !["search", "news", "scrape"].includes(modeArg)) {
+  if (!modeArg || !["search", "news", "scrape"].includes(modeArg)) {
     usage();
     process.exit(1);
   }
 
   const mode = modeArg as QueryMode;
+
+  if (!term || term.startsWith("--")) {
+    if (mode === "scrape") {
+      console.error("Missing URL for scrape mode.\n");
+    } else {
+      console.error(`Missing query for ${mode} mode.\n`);
+    }
+    usage();
+    process.exit(1);
+  }
+
 
   const provider =
     readArg("--provider", args) ??
