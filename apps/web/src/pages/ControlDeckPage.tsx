@@ -325,28 +325,34 @@ export default function ControlDeckPage() {
           </div>
 
           <div className="provider-strip">
-            {modeProviders.map((provider, index) => (
-              <button
-                key={provider.id}
-                onClick={() => setSelectedProvider(provider.id)}
-                className={
-                  provider.id === selectedProvider ? "provider-card selected" : "provider-card"
-                }
-                style={{ animationDelay: `${index * 70}ms` }}
-                type="button"
-              >
-                <p className="provider-name">{provider.name}</p>
-                <p className="provider-desc">{provider.description}</p>
-                <div className="provider-metrics">
-                  <span>{money(provider.priceUsd)}</span>
-                  <span>{provider.latencyEstimateMs}ms</span>
-                  <span>Q{provider.qualityScore}</span>
-                  <span className={`source-badge ${provider.sourceType}`}>
-                    {provider.sourceType}
-                  </span>
-                </div>
-              </button>
-            ))}
+            {modeProviders.length === 0 ? (
+              <p className="empty-note" style={{ margin: "1rem" }}>
+                No providers enabled for {modeLabels[mode]} mode.
+              </p>
+            ) : (
+              modeProviders.map((provider, index) => (
+                <button
+                  key={provider.id}
+                  onClick={() => setSelectedProvider(provider.id)}
+                  className={
+                    provider.id === selectedProvider ? "provider-card selected" : "provider-card"
+                  }
+                  style={{ animationDelay: `${index * 70}ms` }}
+                  type="button"
+                >
+                  <p className="provider-name">{provider.name}</p>
+                  <p className="provider-desc">{provider.description}</p>
+                  <div className="provider-metrics">
+                    <span>{money(provider.priceUsd)}</span>
+                    <span>{provider.latencyEstimateMs}ms</span>
+                    <span>Q{provider.qualityScore}</span>
+                    <span className={`source-badge ${provider.sourceType}`}>
+                      {provider.sourceType}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
 
           <div className="action-row preflight">
@@ -379,7 +385,7 @@ export default function ControlDeckPage() {
               disabled={
                 isLoading ||
                 walletState.status === "signing" ||
-                !selectedProvider ||
+                !selectedProviderDetails ||
                 !walletConnected
               }
               type="button"
