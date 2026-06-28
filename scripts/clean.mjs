@@ -5,6 +5,8 @@ const ROOT = process.cwd();
 const WORKSPACE_ROOTS = ["apps", "packages"];
 const ARTIFACT_DIR_NAMES = new Set(["dist", "coverage"]);
 const API_DATA_DIR = path.join(ROOT, "apps/api/data");
+const API_RUNTIME_FILE_PATTERN = /\.(db(?:-wal|-shm)?|json)$/;
+const PRESERVED_API_DATA_ENTRIES = new Set([".gitkeep"]);
 
 async function removePath(targetPath) {
   try {
@@ -58,11 +60,23 @@ async function cleanApiData() {
   }
 
   for (const entry of entries) {
+    if (PRESERVED_API_DATA_ENTRIES.has(entry.name)) {
+      continue;
+    }
+
+    if (!entry.isFile() || !API_RUNTIME_FILE_PATTERN.test(entry.name)) {
+      continue;
+    }
+
     await removePath(path.join(API_DATA_DIR, entry.name));
   }
 }
 
 async function main() {
+  for (const artifactDir of ARTIFACT_DIR_NAMES) {
+    await removePath(path.join(ROOT, artifactDir));
+  }
+
   for (const workspaceRoot of WORKSPACE_ROOTS) {
     const absoluteRoot = path.join(ROOT, workspaceRoot);
 
