@@ -20,7 +20,7 @@ function extractFreighterError(error: unknown) {
   return JSON.stringify(error);
 }
 
-function normalizeSignature(signedMessage: string | Buffer | null): string {
+function normalizeSignature(signedMessage: string | unknown | null): string {
   if (!signedMessage) {
     throw new Error("Freighter did not return a message signature");
   }
@@ -29,7 +29,13 @@ function normalizeSignature(signedMessage: string | Buffer | null): string {
     return signedMessage;
   }
 
-  return Buffer.from(signedMessage).toString("base64");
+  // Handle Uint8Array or similar array-like objects
+  if (typeof signedMessage === "object" && "length" in signedMessage) {
+    const arr = Array.from(signedMessage as ArrayLike<number>);
+    return btoa(String.fromCharCode(...arr));
+  }
+
+  return String(signedMessage);
 }
 
 export async function fetchSponsorshipEnabled(apiBaseUrl: string): Promise<boolean> {

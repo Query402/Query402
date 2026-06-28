@@ -7,6 +7,7 @@ import {
 import { ExactStellarScheme } from "@x402/stellar/exact/server";
 import type { NextFunction, Request, Response } from "express";
 import type { HTTPRequestContext } from "@x402/core/server";
+import type { PaymentPayload } from "@x402/core/types";
 import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
 import { config } from "./config.js";
 import {
@@ -193,7 +194,7 @@ export function createX402Middleware() {
     const evidence = buildEvidenceFromHttpContext({
       context: httpContext,
       requirements: context.requirements,
-      paymentPayload: context.paymentPayload,
+      paymentPayload: context.paymentPayload as PaymentPayload | undefined,
       settleResult: context.result
     });
     setPaymentEvidence(req, evidence);
