@@ -97,6 +97,19 @@ Copy `.env.example` to `.env` and fill values:
 - `DEMO_MODE` (`true` for deterministic demo reliability)
 - Optional keys: `BRAVE_API_KEY`, `SERPAPI_API_KEY`, `NEWS_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`
 
+### Sponsorship Configuration (Optional)
+
+To enable the sponsored-transaction setup for local demos, set `SPONSORSHIP_ENABLED=true` and configure the following variables. If sponsorship is disabled (the default), these variables are ignored and normal client-paid flow is used.
+
+- `SPONSORSHIP_ENABLED` (`false` by default. Keep disabled for normal local development.)
+- `SPONSORSHIP_SIGNING_SECRET` (Required if enabled. A Stellar secret key used to sponsor transactions. Use a fresh testnet key, do not use real production secrets, e.g. `S...`)
+- `SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD` (Default: `10`. Maximum total USD spend allowed per day.)
+- `SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD` (Default: `1`. Maximum USD spend allowed per client wallet per day.)
+- `SPONSORSHIP_RATE_LIMIT_PER_MINUTE` (Default: `10`. Maximum sponsor requests per minute per wallet.)
+- `SPONSORSHIP_GRANT_TTL_SECONDS` (Default: `300`. How long the sponsor grant is valid.)
+- `SPONSORSHIP_CHALLENGE_TTL_SECONDS` (Default: `60`. Challenge expiration time.)
+- `SPONSORSHIP_DB_PATH` (Default: `data/sponsorship.db`. Path to the local sqlite database tracking budgets.)
+
 Deployment note:
 
 - Render (API): set server vars like `GROQ_*`, `X402_*`, `CORS_ORIGINS`.
