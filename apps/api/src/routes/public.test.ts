@@ -66,6 +66,25 @@ describe("public routes", () => {
     expect(catalogResponse.body.byCategory.scrape.length).toBeGreaterThan(0);
   });
 
+  it("returns safe default analytics shape for fresh storage", async () => {
+    const app = await createPublicApp();
+
+    const analyticsResponse = await request(app).get("/api/analytics");
+
+    expect(analyticsResponse.status).toBe(200);
+    expect(analyticsResponse.body).toMatchObject({
+      totalQueries: 0,
+      totalSpendUsd: 0,
+      spendByCategory: {
+        search: 0,
+        news: 0,
+        scrape: 0
+      },
+      recentUsage: [],
+      recentTransactions: []
+    });
+  });
+
   it("returns usage and analytics summaries from isolated sqlite storage", async () => {
     const app = await createPublicApp();
     const { saveUsageEvent } = await import("../lib/persistence.js");

@@ -57,6 +57,14 @@ function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
   return formatUsdPrice(provider.priceUsd);
 }
 
+function clonePaymentPayload(paymentPayload: unknown): PaymentPayload | undefined {
+  if (!paymentPayload) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(paymentPayload)) as PaymentPayload;
+}
+
 function demoMode402Middleware(req: Request, res: Response, next: NextFunction) {
   if (!req.path.startsWith("/x402/")) {
     return next();
@@ -194,7 +202,7 @@ export function createX402Middleware() {
     const evidence = buildEvidenceFromHttpContext({
       context: httpContext,
       requirements: context.requirements,
-      paymentPayload: context.paymentPayload as PaymentPayload | undefined,
+      paymentPayload: clonePaymentPayload(context.paymentPayload),
       settleResult: context.result
     });
     setPaymentEvidence(req, evidence);

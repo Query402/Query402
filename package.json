@@ -27,7 +27,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:source-artifacts": "node scripts/check-source-artifacts.mjs"
+    "check:source-artifacts": "node scripts/check-source-artifacts.mjs",
+    "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
