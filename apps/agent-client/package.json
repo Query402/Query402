@@ -9,6 +9,7 @@
     "dev": "tsx src/cli.ts",
     "cli": "tsx src/cli.ts",
     "demo": "tsx src/demo.ts",
+    "demo:transcript": "tsx src/transcript.ts",
     "validate:real": "tsx src/validate-real.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
