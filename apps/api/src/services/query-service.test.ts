@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { UnsafeScrapeUrlError } from "../lib/scrape-url-safety.js";
 
 const registryExecuteMock = vi.fn();
 const loggerErrorMock = vi.fn();
@@ -25,7 +24,10 @@ describe("executeQuery", () => {
 
   it("rejects unsafe scrape URLs at the service boundary", async () => {
     process.env.X402_PAY_TO_ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
-    const { executeQuery } = await import("./query-service.js");
+    const [{ executeQuery }, { UnsafeScrapeUrlError }] = await Promise.all([
+      import("./query-service.js"),
+      import("../lib/scrape-url-safety.js")
+    ]);
 
     await expect(
       executeQuery({
