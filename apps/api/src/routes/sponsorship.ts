@@ -1,10 +1,10 @@
 import { Router, type Response } from "express";
+import { queryModeSchema, stellarPublicKeySchema } from "@query402/shared";
 import { z } from "zod";
 import { config } from "../lib/config.js";
 import { createChallenge, verifyAndConsumeChallenge } from "../lib/sponsorship/challenge.js";
 import { issueGrant } from "../lib/sponsorship/grant.js";
-
-const stellarPublicKeySchema = z.string().regex(/^G[A-Z2-7]{55}$/, "Invalid Stellar public key");
+import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
 
 const challengeRequestSchema = z.object({
   wallet: stellarPublicKeySchema
@@ -14,6 +14,12 @@ const grantRequestSchema = z.object({
   wallet: stellarPublicKeySchema,
   challengeId: z.string().uuid(),
   signature: z.string().min(1)
+});
+
+const previewRequestSchema = z.object({
+  wallet: stellarPublicKeySchema,
+  mode: queryModeSchema,
+  provider: z.string().min(1)
 });
 
 export const sponsorshipRouter = Router();
@@ -65,4 +71,14 @@ sponsorshipRouter.post("/api/sponsorship/grants", (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+sponsorshipRouter.post("/api/sponsorship/preview", (req, res) => {
+  const parsed = previewRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const preview = previewSponsoredRun(parsed.data);
+  return res.status(200).json(preview);
 });

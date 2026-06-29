@@ -119,3 +119,46 @@ export interface SponsorshipChallenge {
   message: string;
   expiresAt: string;
 }
+
+export interface SponsorshipPreviewBudget {
+  limitUsd: number;
+  spentUsd: number;
+  remainingUsd: number;
+  windowStart: string;
+}
+
+export interface SponsorshipPreviewRestrictions {
+  mode: QueryMode | null;
+  providerId: string | null;
+}
+
+export interface SponsorshipPreviewGrant {
+  maxAmountUsd: number;
+  ttlSeconds: number;
+  expiresInSeconds: number;
+  restrictions: SponsorshipPreviewRestrictions;
+}
+
+export interface SponsorshipPreview {
+  sponsorshipEnabled: boolean;
+  storageAvailable: boolean;
+  available: boolean;
+  decision: string;
+  network: string;
+  wallet: string;
+  mode: QueryMode;
+  provider: string;
+  providerName: string;
+  grant: SponsorshipPreviewGrant;
+  quotedPriceUsd: number;
+  priceFitsGrant: boolean;
+  perWalletBudget: SponsorshipPreviewBudget;
+  globalBudget: SponsorshipPreviewBudget;
+  reason?: string;
+}
+
+export interface SponsorshipPreviewRequest {
+  wallet: string;
+  mode: QueryMode;
+  provider: string;
+}
