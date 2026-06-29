@@ -100,10 +100,10 @@ export function getSortedProviders(): ProviderDefinition[] {
     .sort((a, b) => {
       const categoryCompare = a.category.localeCompare(b.category);
       if (categoryCompare !== 0) return categoryCompare;
-      
+
       const priceCompare = a.priceUsd - b.priceUsd;
       if (priceCompare !== 0) return priceCompare;
-      
+
       return a.id.localeCompare(b.id);
     });
 }

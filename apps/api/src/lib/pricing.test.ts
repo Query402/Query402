@@ -53,13 +53,13 @@ describe("provider pricing", () => {
 
   it("returns providers sorted by category, then price, then id", () => {
     const sorted = getSortedProviders();
-    
+
     expect(sorted.length).toBe(providers.length);
-    
+
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = sorted[i];
       const next = sorted[i + 1];
-      
+
       if (current.category !== next.category) {
         expect(current.category.localeCompare(next.category)).toBeLessThan(0);
       } else if (current.priceUsd !== next.priceUsd) {
@@ -72,7 +72,7 @@ describe("provider pricing", () => {
 
   it("sorts providers with same category and price by id", () => {
     const originalLength = providers.length;
-    
+
     providers.push({
       id: "search.alpha",
       name: "Alpha Search",
@@ -84,7 +84,7 @@ describe("provider pricing", () => {
       sourceType: "deterministic-fallback",
       enabled: true
     });
-    
+
     providers.push({
       id: "search.zebra",
       name: "Zebra Search",
@@ -96,19 +96,17 @@ describe("provider pricing", () => {
       sourceType: "deterministic-fallback",
       enabled: true
     });
-    
+
     const sorted = getSortedProviders();
-    
-    const sameCategoryPrice = sorted.filter(
-      (p) => p.category === "search" && p.priceUsd === 0.05
-    );
-    
+
+    const sameCategoryPrice = sorted.filter((p) => p.category === "search" && p.priceUsd === 0.05);
+
     expect(sameCategoryPrice.length).toBeGreaterThanOrEqual(2);
-    
+
     const ids = sameCategoryPrice.map((p) => p.id);
     const sortedIds = [...ids].sort();
     expect(ids).toEqual(sortedIds);
-    
+
     providers.length = originalLength;
   });
 
@@ -125,11 +123,11 @@ describe("provider pricing", () => {
       sourceType: "deterministic-fallback",
       enabled: false
     });
-    
+
     const sorted = getSortedProviders();
     expect(sorted.length).toBe(originalLength);
     expect(sorted.some((p) => p.id === "test.disabled")).toBe(false);
-    
+
     providers.pop();
   });
 });

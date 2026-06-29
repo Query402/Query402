@@ -7,9 +7,9 @@ describe("redactSensitiveHeaders", () => {
       payment: "base64payload",
       "X-Custom": "value"
     };
-    
+
     const result = redactSensitiveHeaders(headers);
-    
+
     expect(result.payment).toBe("[REDACTED]");
     expect(result["X-Custom"]).toBe("value");
   });
@@ -19,9 +19,9 @@ describe("redactSensitiveHeaders", () => {
       "Payment-Response": "response-data",
       "Content-Type": "application/json"
     };
-    
+
     const result = redactSensitiveHeaders(headers);
-    
+
     expect(result["Payment-Response"]).toBe("[REDACTED]");
     expect(result["Content-Type"]).toBe("application/json");
   });
@@ -31,9 +31,9 @@ describe("redactSensitiveHeaders", () => {
       AUTHORIZATION: "Bearer token123",
       "X-Request-Id": "abc123"
     };
-    
+
     const result = redactSensitiveHeaders(headers);
-    
+
     expect(result.AUTHORIZATION).toBe("[REDACTED]");
     expect(result["X-Request-Id"]).toBe("abc123");
   });
@@ -45,9 +45,9 @@ describe("redactSensitiveHeaders", () => {
       "User-Agent": "test-agent",
       "Content-Type": "application/json"
     };
-    
+
     const result = redactSensitiveHeaders(headers);
-    
+
     expect(result["X-Trace-Id"]).toBe("trace-123");
     expect(result["X-Request-Id"]).toBe("req-456");
     expect(result["User-Agent"]).toBe("test-agent");
@@ -64,9 +64,9 @@ describe("redactSensitiveHeaders", () => {
       payment: undefined,
       "X-Custom": "value"
     };
-    
+
     const result = redactSensitiveHeaders(headers);
-    
+
     expect(result.payment).toBe("[REDACTED]");
     expect(result["X-Custom"]).toBe("value");
   });
