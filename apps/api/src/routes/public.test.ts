@@ -82,6 +82,14 @@ describe("public routes", () => {
         news: 0,
         scrape: 0
       },
+      executionSummary: {
+        totalExecutions: 0,
+        liveExecutions: 0,
+        fallbackExecutions: 0,
+        unavailableExecutions: 0,
+        timeoutExecutions: 0,
+        circuitOpenExecutions: 0
+      },
       recentUsage: [],
       recentTransactions: []
     });

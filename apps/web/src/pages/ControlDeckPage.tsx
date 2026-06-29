@@ -431,6 +431,12 @@ export default function ControlDeckPage() {
                   <span className={`source-badge ${result.result.source}`}>
                     Source: {result.result.source}
                   </span>
+                  <span>
+                    Exec: {result.result.execution.source}
+                    {result.result.execution.fallbackReason
+                      ? ` · ${result.result.execution.fallbackReason}`
+                      : ""}
+                  </span>
                 </div>
 
                 <div className="trace-box">
@@ -498,6 +504,32 @@ export default function ControlDeckPage() {
             )}
           </div>
 
+          <div className="analytics-panel">
+            <h3>Execution reliability</h3>
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : !hasUsageHistory ? (
+              <p className="panel-empty-note">
+                No execution telemetry yet. Run a query to see live and fallback counts.
+              </p>
+            ) : (
+              <ul>
+                <li>
+                  <span>Live</span>
+                  <strong>{analytics!.executionSummary.liveExecutions}</strong>
+                </li>
+                <li>
+                  <span>Fallback</span>
+                  <strong>{analytics!.executionSummary.fallbackExecutions}</strong>
+                </li>
+                <li>
+                  <span>Timeouts</span>
+                  <strong>{analytics!.executionSummary.timeoutExecutions}</strong>
+                </li>
+              </ul>
+            )}
+          </div>
+
           <div className="feed-panel">
             <h3>Recent transactions</h3>
             {showAnalyticsSkeleton ? (
@@ -538,6 +570,13 @@ export default function ControlDeckPage() {
                   </p>
                   <small>
                     {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
+                    {usage.execution
+                      ? ` · ${usage.execution.source}${
+                          usage.execution.fallbackReason
+                            ? ` (${usage.execution.fallbackReason})`
+                            : ""
+                        }`
+                      : ""}
                   </small>
                 </div>
               ))

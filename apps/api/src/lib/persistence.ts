@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import type {
   AnalyticsSummary,
   PaymentAttempt,
+  ProviderExecutionMetadata,
   PaymentSource,
   QueryMode,
   UsageEvent
@@ -23,6 +24,7 @@ export interface PersistPaidRequestInput {
   latencyMs: number;
   traceId: string;
   paymentResponseHeader: string | null;
+  execution: ProviderExecutionMetadata;
   payerPublicKey?: string;
 }
 
@@ -77,6 +79,7 @@ function buildUsageEvent(
     traceId: input.traceId,
     createdAt: now,
     latencyMs: input.latencyMs,
+    execution: input.execution,
     ...overrides
   };
 }

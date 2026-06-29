@@ -53,9 +53,6 @@ export async function executeQuery(params: {
 
   const safeInput = params.mode === "scrape" ? await validateScrapeUrl(queryOrUrl) : queryOrUrl;
 
-  // Registry handles provider matching, circuit breaking, timeouts, and fallbacks
-  const start = Date.now();
-
   let execution;
   try {
     execution = await registry.execute(params.mode, params.provider, safeInput);
@@ -72,7 +69,7 @@ export async function executeQuery(params: {
     throw error;
   }
 
-  const latencyMs = Date.now() - start;
+  const latencyMs = execution.execution.observedDurationMs;
 
   return {
     mode: params.mode,
@@ -84,6 +81,7 @@ export async function executeQuery(params: {
     traceId: `trace_${nanoid(12)}`,
     items: execution.items,
     source: execution.source,
+    execution: execution.execution,
     raw: {
       queryOrUrl: safeInput,
       adapterId: params.provider

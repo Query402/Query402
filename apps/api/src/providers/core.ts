@@ -1,4 +1,8 @@
-import { ProviderDefinition, ProviderResultItem } from "@query402/shared";
+import type {
+  ProviderExecutionMetadata,
+  ProviderResultItem,
+  SourceType
+} from "@query402/shared";
 
 export interface ProviderAdapter {
   /** The unique ID of the provider */
@@ -16,7 +20,8 @@ export interface ProviderAdapter {
 
 export interface AdapterExecutionResult {
   items: ProviderResultItem[];
-  source: "live" | "deterministic-fallback" | "unavailable";
+  source: SourceType;
+  execution: ProviderExecutionMetadata;
 }
 
 export interface ProviderRegistry {

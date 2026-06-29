@@ -206,6 +206,15 @@ paidRouter.post("/api/paid/run", async (req, res, next) => {
       priceUsd: quotedPriceUsd,
       latencyMs: result?.latencyMs ?? 0,
       traceId: result?.traceId ?? `trace_sponsored_${grant.grantId}`,
+      execution: result?.execution ?? {
+        providerId: parsed.data.provider,
+        source: "unavailable",
+        usedFallback: true,
+        fallbackReason: "missing-fallback",
+        latencyEstimateMs: 0,
+        observedDurationMs: 0,
+        circuitBreakerState: "closed"
+      },
       paymentResponseHeader: output.paymentResponseHeader,
       walletPublicKey: grant.wallet,
       sponsorshipGrantId: grant.grantId,

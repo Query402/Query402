@@ -1,7 +1,25 @@
 export type QueryMode = "search" | "news" | "scrape";
 export type ProviderCategory = QueryMode;
 export type SourceType = "live" | "deterministic-fallback" | "unavailable";
+export type ExecutionFallbackReason =
+  | "timeout"
+  | "circuit-open"
+  | "unhealthy"
+  | "adapter-error"
+  | "deterministic-provider"
+  | "missing-fallback";
+export type CircuitBreakerState = "closed" | "half-open" | "open";
 export type PaymentSource = "sponsored" | "wallet" | "demo";
+
+export interface ProviderExecutionMetadata {
+  providerId: string;
+  source: SourceType;
+  usedFallback: boolean;
+  fallbackReason?: ExecutionFallbackReason;
+  latencyEstimateMs: number;
+  observedDurationMs: number;
+  circuitBreakerState?: CircuitBreakerState;
+}
 
 export interface ProviderDefinition {
   id: string;
@@ -32,6 +50,7 @@ export interface QueryResult {
   traceId: string;
   items: ProviderResultItem[];
   source: SourceType;
+  execution: ProviderExecutionMetadata;
   raw?: Record<string, unknown>;
 }
 
@@ -54,6 +73,7 @@ export interface UsageEvent {
   traceId: string;
   createdAt: string;
   latencyMs: number;
+  execution?: ProviderExecutionMetadata;
   sponsorshipGrantId?: string;
   policyDecision?: string;
   paymentSource?: PaymentSource;
@@ -92,6 +112,16 @@ export interface AnalyticsSummary {
   spendByCategory: Record<QueryMode, number>;
   settledSpendByCategory: Record<QueryMode, number>;
   demoSpendByCategory: Record<QueryMode, number>;
+  executionSummary: {
+    totalExecutions: number;
+    liveExecutions: number;
+    fallbackExecutions: number;
+    unavailableExecutions: number;
+    timeoutExecutions: number;
+    circuitOpenExecutions: number;
+    fallbackByCategory: Record<QueryMode, number>;
+    fallbackReasonCounts: Record<ExecutionFallbackReason, number>;
+  };
   recentTransactions: PaymentAttempt[];
   recentUsage: UsageEvent[];
 }

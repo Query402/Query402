@@ -74,5 +74,16 @@ ALTER TABLE payment_attempts ADD COLUMN amount TEXT;
 ALTER TABLE payment_attempts ADD COLUMN evidence_kind TEXT;
 ALTER TABLE payment_attempts ADD COLUMN facilitator_result TEXT;
 `
+  },
+  {
+    version: 3,
+    sql: `
+ALTER TABLE usage_events ADD COLUMN execution_source TEXT;
+ALTER TABLE usage_events ADD COLUMN execution_used_fallback INTEGER;
+ALTER TABLE usage_events ADD COLUMN execution_fallback_reason TEXT;
+ALTER TABLE usage_events ADD COLUMN execution_latency_estimate_ms INTEGER;
+ALTER TABLE usage_events ADD COLUMN execution_observed_duration_ms INTEGER;
+ALTER TABLE usage_events ADD COLUMN execution_circuit_breaker_state TEXT;
+`
   }
 ];
