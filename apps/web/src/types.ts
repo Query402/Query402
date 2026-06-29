@@ -46,6 +46,27 @@ export interface AnalyticsResponse {
     fallbackByCategory: Record<QueryMode, number>;
     fallbackReasonCounts: Record<string, number>;
   };
+  totalDemoQueries: number;
+  totalSettledPayments: number;
+  spendByPaymentSource: Record<string, number>;
+  recentDemoActivity: Array<{
+    id: string;
+    amountUsd: number;
+    endpoint: string;
+    providerId: string;
+    status: string;
+    createdAt: string;
+    paymentSource?: string;
+  }>;
+  recentSettledPayments: Array<{
+    id: string;
+    amountUsd: number;
+    endpoint: string;
+    providerId: string;
+    status: string;
+    createdAt: string;
+    paymentSource?: string;
+  }>;
   recentTransactions: Array<{
     id: string;
     amountUsd: number;

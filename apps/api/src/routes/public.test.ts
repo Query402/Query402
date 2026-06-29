@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildPaidQueryFixture } from "../test/storage-test-helpers.js";
+import { buildPaidQueryFixture, buildTestUsageEvent } from "../test/storage-test-helpers.js";
 import { applyApiTestEnv, resetApiTestStorage } from "../test/api-test-helpers.js";
 
 describe("public routes", () => {
@@ -297,6 +297,103 @@ describe("public routes", () => {
         status: "demo-paid",
         evidenceKind: "demo"
       });
+    });
+  });
+
+  it("returns safe default analytics shape for fresh storage", async () => {
+    const app = await createPublicApp();
+
+    const analyticsResponse = await request(app).get("/api/analytics");
+
+    expect(analyticsResponse.status).toBe(200);
+    expect(analyticsResponse.body).toMatchObject({
+      totalQueries: 0,
+      totalSpendUsd: 0,
+      spendByCategory: {
+        search: 0,
+        news: 0,
+        scrape: 0
+      },
+      executionSummary: {
+        totalExecutions: 0,
+        liveExecutions: 0,
+        fallbackExecutions: 0,
+        unavailableExecutions: 0,
+        timeoutExecutions: 0,
+        circuitOpenExecutions: 0
+      },
+      totalDemoQueries: 0,
+      totalSettledPayments: 0,
+      spendByPaymentSource: {},
+      recentDemoActivity: [],
+      recentSettledPayments: [],
+      recentUsage: [],
+      recentTransactions: []
+    });
+  });
+
+  it("returns usage and analytics summaries from isolated sqlite storage", async () => {
+    const app = await createPublicApp();
+    const { persistPaymentAndUsage } = await import("../lib/persistence.js");
+    const { buildTestPaymentAttempt } = await import("../test/storage-test-helpers.js");
+
+    await persistPaymentAndUsage({
+      payment: buildTestPaymentAttempt({
+        id: "pay_demo_1",
+        status: "demo-paid",
+        paymentSource: "demo",
+        amountUsd: 0.01
+      }),
+      usage: buildTestUsageEvent({
+        id: "use_demo_1",
+        queryOrUrl: "stellar x402",
+        paymentStatus: "demo-paid",
+        traceId: "trace_demo_1",
+        createdAt: "2026-06-21T10:00:00.000Z",
+        latencyMs: 12
+      })
+    });
+
+    await persistPaymentAndUsage({
+      payment: buildTestPaymentAttempt({
+        id: "pay_settled_1",
+        status: "settled",
+        paymentSource: "wallet",
+        amountUsd: 0.02
+      }),
+      usage: buildTestUsageEvent({
+        id: "use_settled_1",
+        queryOrUrl: "settled query",
+        paymentStatus: "settled",
+        traceId: "trace_settled_1",
+        createdAt: "2026-06-21T11:00:00.000Z",
+        latencyMs: 34
+      })
+    });
+
+    const usageResponse = await request(app).get("/api/usage");
+    const analyticsResponse = await request(app).get("/api/analytics");
+
+    expect(usageResponse.status).toBe(200);
+    expect(usageResponse.body.usage).toHaveLength(2);
+    expect(usageResponse.body.pagination).toMatchObject({
+      count: 2,
+      offset: 0
+    });
+
+    expect(analyticsResponse.status).toBe(200);
+    expect(analyticsResponse.body.totalQueries).toBe(2);
+    expect(analyticsResponse.body.totalSpendUsd).toBe(0.02);
+    expect(analyticsResponse.body.spendByCategory.search).toBe(0.02);
+    expect(analyticsResponse.body.totalDemoQueries).toBe(1);
+    expect(analyticsResponse.body.totalSettledPayments).toBe(1);
+    expect(analyticsResponse.body.recentDemoActivity).toHaveLength(1);
+    expect(analyticsResponse.body.recentDemoActivity[0].id).toBe("pay_demo_1");
+    expect(analyticsResponse.body.recentSettledPayments).toHaveLength(1);
+    expect(analyticsResponse.body.recentSettledPayments[0].id).toBe("pay_settled_1");
+    expect(analyticsResponse.body.spendByPaymentSource).toMatchObject({
+      demo: 0.01,
+      wallet: 0.02
     });
   });
 });

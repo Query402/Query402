@@ -316,6 +316,18 @@ export default function ControlDeckPage() {
             isLoading={showAnalyticsSkeleton}
           />
           <StatTile
+            label="Demo Q"
+            value={String(analytics?.totalDemoQueries ?? 0)}
+            icon={<Sparkles size={16} />}
+            isLoading={showAnalyticsSkeleton}
+          />
+          <StatTile
+            label="Settled"
+            value={String(analytics?.totalSettledPayments ?? 0)}
+            icon={<CircleDollarSign size={16} />}
+            isLoading={showAnalyticsSkeleton}
+          />
+          <StatTile
             label="Spend"
             value={money(analytics?.totalSpendUsd ?? 0)}
             icon={<CircleDollarSign size={16} />}
@@ -651,20 +663,63 @@ export default function ControlDeckPage() {
             )}
           </div>
 
-          <div className="feed-panel">
-            <h3>Recent transactions</h3>
+          <div className="analytics-panel">
+            <h3>Spend by payment source</h3>
             {showAnalyticsSkeleton ? (
               <AnalyticsSkeletonRows count={3} />
-            ) : (analytics?.recentTransactions ?? []).length === 0 ? (
+            ) : !hasUsageHistory ? (
               <p className="panel-empty-note">
-                No payments yet. Your x402 settlement history will show up here.
+                No spend recorded yet.
               </p>
             ) : (
-              analytics!.recentTransactions.slice(0, 5).map((tx) => (
+              <ul>
+                {Object.entries(analytics!.spendByPaymentSource).map(([source, amount]) => (
+                  <li key={source}>
+                    <span>{source === "demo" ? "Demo" : source === "sponsored" ? "Sponsored" : source === "wallet" ? "Wallet" : source}</span>
+                    <strong>{money(amount)}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="feed-panel">
+            <h3>Demo activity (not on-chain)</h3>
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : (analytics?.recentDemoActivity ?? []).length === 0 ? (
+              <p className="panel-empty-note">
+                No demo activity yet. Demo-paid queries appear here.
+              </p>
+            ) : (
+              analytics!.recentDemoActivity.slice(0, 5).map((tx) => (
                 <div key={tx.id} className="feed-row">
                   <p>
                     <span>{tx.providerId}</span>
                     <strong>{money(tx.amountUsd)}</strong>
+                    <span className="source-badge demo">demo</span>
+                  </p>
+                  <small>{new Date(tx.createdAt).toLocaleString()}</small>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="feed-panel">
+            <h3>Real settled payments (on-chain)</h3>
+            {showAnalyticsSkeleton ? (
+              <AnalyticsSkeletonRows count={3} />
+            ) : (analytics?.recentSettledPayments ?? []).length === 0 ? (
+              <p className="panel-empty-note">
+                No on-chain settlements yet. Wallet-paid transactions appear here.
+              </p>
+            ) : (
+              analytics!.recentSettledPayments.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="feed-row">
+                  <p>
+                    <span>{tx.providerId}</span>
+                    <strong>{money(tx.amountUsd)}</strong>
+                    <span className="source-badge settled">settled</span>
                   </p>
                   <small>{new Date(tx.createdAt).toLocaleString()}</small>
                   {tx.transactionHash && (

@@ -112,6 +112,15 @@ export function buildAnalyticsSummary(
     emptyExecutionSummary()
   );
 
+  const totalDemoQueries = usage.filter((e) => e.paymentStatus === "demo-paid").length;
+  const totalSettledPayments = usage.filter((e) => e.paymentStatus === "settled").length;
+
+  const spendByPaymentSource = payments.reduce<Record<string, number>>((acc, p) => {
+    const source = p.paymentSource ?? "unknown";
+    acc[source] = Number(((acc[source] ?? 0) + p.amountUsd).toFixed(6));
+    return acc;
+  }, {});
+
   const recentUsageLimit = options?.recentUsageLimit ?? DEFAULT_RECENT_LIMIT;
   const recentPaymentLimit = options?.recentPaymentLimit ?? DEFAULT_RECENT_LIMIT;
 
@@ -125,6 +134,15 @@ export function buildAnalyticsSummary(
     settledSpendByCategory,
     demoSpendByCategory,
     executionSummary,
+    totalDemoQueries,
+    totalSettledPayments,
+    spendByPaymentSource,
+    recentDemoActivity: payments
+      .filter((p) => p.status === "demo-paid")
+      .slice(0, recentPaymentLimit),
+    recentSettledPayments: payments
+      .filter((p) => p.status === "settled")
+      .slice(0, recentPaymentLimit),
     recentTransactions: payments.slice(0, recentPaymentLimit),
     recentUsage: usage.slice(0, recentUsageLimit)
   };
