@@ -5,7 +5,9 @@ export type FreshnessState = "fresh" | "stale" | "unavailable";
 export const DEFAULT_STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 export interface DeriveFreshnessInput {
-  kind?: ProofKind;
+  /** Free-form kind; we narrow to the four canonical `ProofKind` values at runtime
+   *  inside the label/tooltip helpers. Anything else falls back to a generic copy. */
+  kind?: string;
   capturedAt?: string | null;
   /** Injectable for deterministic tests. */
   now?: number;
@@ -16,7 +18,7 @@ export interface DeriveFreshnessInput {
 export interface FreshnessView {
   state: FreshnessState;
   isDemo: boolean;
-  kind: ProofKind | undefined;
+  kind: string | undefined;
   ageMs: number | null;
   label: string;
   tooltip: string;
@@ -79,7 +81,7 @@ export function deriveFreshness(input: DeriveFreshnessInput): FreshnessView {
   };
 }
 
-function unavailableView(kind: ProofKind | undefined): FreshnessView {
+function unavailableView(kind: string | undefined): FreshnessView {
   let copy: { label: string; tooltip: string };
   let isDemo = false;
   if (kind === "demo") {
@@ -100,7 +102,7 @@ function unavailableView(kind: ProofKind | undefined): FreshnessView {
   };
 }
 
-function chooseFreshLabel(kind: ProofKind | undefined, ageMs: number) {
+function chooseFreshLabel(kind: string | undefined, ageMs: number) {
   const age = formatAge(ageMs);
   if (kind === "demo") return `Demo evidence · Fresh (${age})`;
   if (kind === "failed") return `Failed proof · captured (${age})`;
@@ -109,7 +111,7 @@ function chooseFreshLabel(kind: ProofKind | undefined, ageMs: number) {
   return `Fresh proof (${age})`;
 }
 
-function chooseStaleLabel(kind: ProofKind | undefined, ageMs: number) {
+function chooseStaleLabel(kind: string | undefined, ageMs: number) {
   const age = formatAge(ageMs);
   if (kind === "demo") return `Demo evidence · Stale (${age})`;
   if (kind === "failed") return `Failed proof · stale (${age})`;
@@ -118,7 +120,7 @@ function chooseStaleLabel(kind: ProofKind | undefined, ageMs: number) {
   return `Stale proof (${age})`;
 }
 
-function chooseFreshTooltip(kind: ProofKind | undefined) {
+function chooseFreshTooltip(kind: string | undefined) {
   if (kind === "demo") {
     return "Fresh demo marker captured locally. Demo evidence does not settle on-chain.";
   }
@@ -128,7 +130,7 @@ function chooseFreshTooltip(kind: ProofKind | undefined) {
   return "Payment proof is recent and reflects the most recent paid execution.";
 }
 
-function chooseStaleTooltip(kind: ProofKind | undefined) {
+function chooseStaleTooltip(kind: string | undefined) {
   if (kind === "demo") {
     return "Demo marker is older than the freshness threshold. Demo evidence does not settle on-chain.";
   }

@@ -1,8 +1,11 @@
 import { deriveFreshness, type FreshnessView } from "../lib/freshness.js";
-import type { ProofKind } from "../types.js";
 
 export interface FreshnessBadgeProps {
-  kind?: ProofKind;
+  /** Free-form kind discriminator; narrows to known state copy at runtime via
+   *  `deriveFreshness`. Typed as string so any new evidence kind value passes
+   *  through without a type change. */
+  kind?: string;
+  /** ISO timestamp captured at evidence build time. Missing/null/invalid → unavailable. */
   capturedAt?: string | null;
 }
 

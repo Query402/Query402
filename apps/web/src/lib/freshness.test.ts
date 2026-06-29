@@ -19,6 +19,34 @@ function build(overrides: Partial<DeriveFreshnessInput> = {}): DeriveFreshnessIn
 }
 
 describe("deriveFreshness", () => {
+  describe("unknown kind fallback", () => {
+    it("renders generic copy for an unrecognized kind value", () => {
+      const view = deriveFreshness(
+        build({
+          kind: "refunded",
+          capturedAt: new Date(NOW - 4_000).toISOString()
+        })
+      );
+      expect(view.state).toBe("fresh");
+      expect(view.isDemo).toBe(false);
+      expect(view.label).toMatch(/Fresh proof/);
+      expect(view.label).not.toMatch(/refunded/);
+      expect(view.label).toContain("4s ago");
+    });
+
+    it("renders generic stale copy for an unrecognized kind value", () => {
+      const view = deriveFreshness(
+        build({
+          kind: "refunded",
+          capturedAt: new Date(NOW - minutes(7)).toISOString()
+        })
+      );
+      expect(view.state).toBe("stale");
+      expect(view.label).toMatch(/Stale proof/);
+      expect(view.label).not.toMatch(/refunded/);
+    });
+  });
+
   describe("missing proof timestamp", () => {
     it("renders as unavailable (not fresh) when capturedAt is missing", () => {
       const view = deriveFreshness(build({ kind: "settled" }));
