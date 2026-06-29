@@ -28,6 +28,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:source-artifacts": "node scripts/check-source-artifacts.mjs",
+    "check:payment-leaks": "node scripts/check-payment-leaks.mjs",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {

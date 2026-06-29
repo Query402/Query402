@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { runPaymentLeakCheck } from "./check-payment-leaks.mjs";
 
 const ROOT = process.cwd();
 const SOURCE_ROOTS = ["apps", "packages"];
@@ -99,3 +100,5 @@ if (violations.length > 0) {
 }
 
 console.log("No generated source artifacts found.");
+
+await runPaymentLeakCheck();
