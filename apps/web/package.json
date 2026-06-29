@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "lint": "eslint src vite.config.ts",
     "format": "prettier --write src vite.config.ts tailwind.config.ts",
     "format:check": "prettier --check src vite.config.ts tailwind.config.ts"
@@ -35,7 +36,8 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "vitest": "^3.2.6"
   },
   "optionalDependencies": {
     "@esbuild/linux-x64": "^0.21.5",

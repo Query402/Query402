@@ -16,6 +16,7 @@ import { API_BASE_URL, fetchJson, money } from "../lib/api.js";
 import { fetchSponsorshipEnabled, runSponsoredPaidQuery } from "../lib/sponsorship.js";
 import { runWalletPaidQuery } from "../lib/x402.js";
 import { WalletSessionMachine, FreighterAdapter, type WalletState } from "../lib/wallet/index.js";
+import { FreshnessBadge } from "../components/FreshnessBadge.js";
 
 const modeLabels: Record<QueryMode, string> = {
   search: "Search",
@@ -432,6 +433,11 @@ export default function ControlDeckPage() {
                     Source: {result.result.source}
                   </span>
                 </div>
+
+                <FreshnessBadge
+                  kind={result.payment.evidence?.kind}
+                  capturedAt={result.payment.evidence?.capturedAt}
+                />
 
                 <div className="trace-box">
                   <p>payment-response: {result.payment.paymentResponseHeader ?? "<none>"}</p>

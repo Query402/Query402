@@ -1,10 +1,27 @@
 import type { ProviderDefinition, QueryMode, QueryResult } from "@query402/shared";
 
+export type ProofKind = "demo" | "verified" | "settled" | "failed";
+export type ProofStatus = "demo-paid" | "verified" | "settled" | "failed" | "settlement-pending";
+
+export interface PaymentEvidenceSummary {
+  kind: ProofKind;
+  status: ProofStatus;
+  network?: string;
+  asset?: string;
+  amount?: string;
+  payTo?: string;
+  facilitatorUrl?: string;
+  payer?: string;
+  transactionHash?: string;
+  capturedAt?: string;
+}
+
 export interface PaidQueryResponse {
   payment: {
     network: string;
     facilitatorUrl: string;
     paymentResponseHeader: string | null;
+    evidence?: PaymentEvidenceSummary;
   };
   result: QueryResult;
 }
