@@ -21,12 +21,13 @@ export async function resetAnalyticsStore(dbPath?: string): Promise<void> {
 
 export function buildTestUsageEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
   const suffix = randomUUID().slice(0, 8);
+  const providerId = overrides.providerId ?? "search.basic";
 
   return {
     id: `use_${suffix}`,
     mode: "search",
     endpoint: "/x402/search",
-    providerId: "search.basic",
+    providerId,
     queryOrUrl: "test query",
     priceUsd: 0.01,
     network: "stellar:testnet",
@@ -35,6 +36,15 @@ export function buildTestUsageEvent(overrides: Partial<UsageEvent> = {}): UsageE
     traceId: `trace_${suffix}`,
     createdAt: new Date().toISOString(),
     latencyMs: 100,
+    execution: {
+      providerId,
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "deterministic-provider",
+      latencyEstimateMs: 700,
+      observedDurationMs: 100,
+      circuitBreakerState: "closed"
+    },
     ...overrides
   };
 }

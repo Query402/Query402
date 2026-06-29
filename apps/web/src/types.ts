@@ -1,10 +1,5 @@
 import type { ProviderDefinition, QueryMode, QueryResult } from "@query402/shared";
 
-// Discriminator union used by the freshness badge to derive fresh/stale/unavailable
-// copy. Stored fields on PaymentEvidenceSummary below stay typed as `string` so
-// any new evidence kind can flow through without a type change.
-export type ProofKind = "demo" | "verified" | "settled" | "failed";
-
 export interface PaymentProofLinks {
   transaction: string;
   payer: string;
@@ -23,15 +18,7 @@ export interface PaymentEvidenceSummary {
   facilitatorUrl: string;
   payer?: string;
   transactionHash?: string;
-  /** Captured at evidence build time on the API. Drives the
-   *  fresh/stale/unavailable badge in apps/web/src/components/FreshnessBadge.tsx.
-   *  Older cached responses without this field render as `unavailable`. */
-  capturedAt?: string;
-  /** Optional today because `paymentEvidenceSummary()` in apps/api/src/lib/payment-evidence.ts
-   *  does not emit `proofLinks` from the live build path. Upstream Control Deck renders
-   *  this block under a `result.payment.evidence?.proofLinks &&` guard so the runtime is
-   *  already defensive. We type it as optional to match what the API actually returns. */
-  proofLinks?: PaymentProofLinks;
+  proofLinks: PaymentProofLinks;
 }
 
 export interface PaidQueryResponse {
