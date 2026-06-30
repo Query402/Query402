@@ -528,7 +528,8 @@ export default function ControlDeckPage() {
                     </button>
                   </p>
                   <p>
-                    evidence: {result.payment.evidence?.status ?? result.payment.evidence?.kind ?? "none"}
+                    evidence:{" "}
+                    {result.payment.evidence?.status ?? result.payment.evidence?.kind ?? "none"}
                   </p>
                   <p>network: {result.payment.network}</p>
                   {result.payment.evidence?.proofLinks && (
