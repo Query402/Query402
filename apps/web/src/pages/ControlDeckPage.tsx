@@ -198,9 +198,7 @@ export default function ControlDeckPage() {
         if (err instanceof Error && err.name === "AbortError") {
           return;
         }
-        setPreviewError(
-          err instanceof Error ? err.message : "Grant preview unavailable"
-        );
+        setPreviewError(err instanceof Error ? err.message : "Grant preview unavailable");
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -523,7 +521,11 @@ export default function ControlDeckPage() {
                       <p>
                         tx:{" "}
                         {result.payment.evidence.proofLinks.transaction !== "not_available" ? (
-                          <a href={result.payment.evidence.proofLinks.transaction} target="_blank" rel="noreferrer">
+                          <a
+                            href={result.payment.evidence.proofLinks.transaction}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             {result.payment.evidence.transactionHash?.slice(0, 12)}...
                           </a>
                         ) : (
@@ -533,7 +535,11 @@ export default function ControlDeckPage() {
                       <p>
                         payer:{" "}
                         {result.payment.evidence.proofLinks.payer !== "not_available" ? (
-                          <a href={result.payment.evidence.proofLinks.payer} target="_blank" rel="noreferrer">
+                          <a
+                            href={result.payment.evidence.proofLinks.payer}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             {result.payment.evidence.payer?.slice(0, 8)}...
                           </a>
                         ) : (
@@ -814,11 +820,7 @@ function SponsorshipPreviewPanel(props: {
       <header className="grant-preview-head">
         <ShieldCheck size={14} />
         <h3>Sponsored grant status</h3>
-        <span
-          className={
-            allowed ? "grant-preview-chip allowed" : "grant-preview-chip denied"
-          }
-        >
+        <span className={allowed ? "grant-preview-chip allowed" : "grant-preview-chip denied"}>
           {allowed ? (
             <>
               <CheckCircle2 size={12} /> {allowLabel}
@@ -834,11 +836,7 @@ function SponsorshipPreviewPanel(props: {
       <p className="grant-preview-summary">{allowSubtitle}</p>
 
       <div className="grant-preview-grid">
-        <GrantRow
-          label="Wallet"
-          value={walletDisplay}
-          tone="neutral"
-        />
+        <GrantRow label="Wallet" value={walletDisplay} tone="neutral" />
         <GrantRow
           label="Grant API"
           value={
@@ -850,11 +848,7 @@ function SponsorshipPreviewPanel(props: {
           }
           tone="neutral"
         />
-        <GrantRow
-          label="Max per grant"
-          value={money(preview.grant.maxAmountUsd)}
-          tone="neutral"
-        />
+        <GrantRow label="Max per grant" value={money(preview.grant.maxAmountUsd)} tone="neutral" />
         <GrantRow
           label="Grant TTL"
           value={
@@ -870,11 +864,7 @@ function SponsorshipPreviewPanel(props: {
                 : "neutral"
           }
         />
-        <GrantRow
-          label="Provider"
-          value={providerName}
-          tone={allowed ? "neutral" : "warn"}
-        />
+        <GrantRow label="Provider" value={providerName} tone={allowed ? "neutral" : "warn"} />
         <GrantRow
           label="Restriction"
           value={
@@ -890,24 +880,18 @@ function SponsorshipPreviewPanel(props: {
         />
         <GrantRow
           label="Request price"
-          value={
-            preview.quotedPriceUsd > 0 ? money(preview.quotedPriceUsd) : "—"
-          }
+          value={preview.quotedPriceUsd > 0 ? money(preview.quotedPriceUsd) : "—"}
           tone={preview.priceFitsGrant ? "ok" : "deny"}
         />
         <GrantRow
           label="Wallet budget"
           value={`${money(preview.perWalletBudget.spentUsd)} / ${money(preview.perWalletBudget.limitUsd)}`}
-          tone={
-            preview.perWalletBudget.remainingUsd <= 0 ? "deny" : "neutral"
-          }
+          tone={preview.perWalletBudget.remainingUsd <= 0 ? "deny" : "neutral"}
         />
       </div>
 
       {!allowed ? (
-        <p className="grant-preview-actionable">
-          {denyActionableCopy(preview.decision)}
-        </p>
+        <p className="grant-preview-actionable">{denyActionableCopy(preview.decision)}</p>
       ) : (
         <p className="grant-preview-actionable ok">
           Ready to execute. Funds will be reserved against the wallet budget before the paid run.
@@ -917,7 +901,11 @@ function SponsorshipPreviewPanel(props: {
   );
 }
 
-function GrantRow(props: { label: string; value: ReactNode; tone: "ok" | "warn" | "deny" | "neutral" }) {
+function GrantRow(props: {
+  label: string;
+  value: ReactNode;
+  tone: "ok" | "warn" | "deny" | "neutral";
+}) {
   return (
     <div className={`grant-preview-row tone-${props.tone}`}>
       <span className="grant-preview-label">{props.label}</span>

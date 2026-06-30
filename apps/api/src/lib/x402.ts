@@ -243,11 +243,17 @@ export function createX402Middleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
     res.json = function (body: unknown) {
-      if (res.statusCode === 402 && body && typeof body === "object" && !("debug" in (body as Record<string, unknown>))) {
+      if (
+        res.statusCode === 402 &&
+        body &&
+        typeof body === "object" &&
+        !("debug" in (body as Record<string, unknown>))
+      ) {
         const pId = Array.isArray(req.query.provider)
           ? req.query.provider[0]
           : (req.query.provider ?? "unknown");
-        const paymentHeader = req.header("payment-signature") ?? req.header("x-payment") ?? undefined;
+        const paymentHeader =
+          req.header("payment-signature") ?? req.header("x-payment") ?? undefined;
         const mode = routeModeFromPath(req.path);
         let expectedPrice = "$0.01";
         if (mode) {
