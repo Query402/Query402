@@ -19,7 +19,16 @@ function mockQueryResult(mode: "search" | "news" | "scrape", providerId: string,
     timestamp: "2026-06-21T10:00:00.000Z",
     traceId: `trace_${providerId}`,
     items: [],
-    source: "deterministic-fallback"
+    source: "deterministic-fallback",
+    execution: {
+      providerId,
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "deterministic-provider",
+      latencyEstimateMs: 700,
+      observedDurationMs: 10,
+      circuitBreakerState: "closed"
+    }
   });
 }
 
