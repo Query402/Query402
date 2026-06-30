@@ -1,5 +1,12 @@
 import type { ProviderDefinition, QueryMode, QueryResult } from "@query402/shared";
 
+// Discriminator union used by the freshness badge on the Control Deck. Stored
+// fields on PaymentEvidenceSummary below stay typed as `string` so any new
+// evidence kind can flow through without a type change. Exported here so the
+// badge and helper can import a stable shape even if upstream-sync rewrites
+// this file.
+export type ProofKind = "demo" | "verified" | "settled" | "failed";
+
 export interface PaymentProofLinks {
   transaction: string;
   payer: string;
@@ -18,6 +25,10 @@ export interface PaymentEvidenceSummary {
   facilitatorUrl: string;
   payer?: string;
   transactionHash?: string;
+  /** Captured at evidence build time on the API. Drives the
+   *  fresh/stale/unavailable badge in apps/web/src/components/FreshnessBadge.tsx.
+   *  Older cached responses without this field render as `unavailable`. */
+  capturedAt?: string;
   proofLinks: PaymentProofLinks;
 }
 
