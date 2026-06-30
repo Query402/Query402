@@ -24,12 +24,18 @@ INSERT INTO usage_events (
   id, mode, endpoint, provider_id, query_or_url, price_usd, network,
   payment_status, payment_kind, payment_tx_hash, asset, pay_to_address, amount,
   facilitator_url, payer_public_key, trace_id, created_at, latency_ms,
-  sponsorship_grant_id, policy_decision, payment_source, sponsor_public_key
+  execution_source, execution_used_fallback, execution_fallback_reason,
+  execution_latency_estimate_ms, execution_observed_duration_ms,
+  execution_circuit_breaker_state, sponsorship_grant_id, policy_decision,
+  payment_source, sponsor_public_key
 ) VALUES (
   @id, @mode, @endpoint, @provider_id, @query_or_url, @price_usd, @network,
   @payment_status, @payment_kind, @payment_tx_hash, @asset, @pay_to_address, @amount,
   @facilitator_url, @payer_public_key, @trace_id, @created_at, @latency_ms,
-  @sponsorship_grant_id, @policy_decision, @payment_source, @sponsor_public_key
+  @execution_source, @execution_used_fallback, @execution_fallback_reason,
+  @execution_latency_estimate_ms, @execution_observed_duration_ms,
+  @execution_circuit_breaker_state, @sponsorship_grant_id, @policy_decision,
+  @payment_source, @sponsor_public_key
 )
 `;
 

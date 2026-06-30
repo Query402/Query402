@@ -23,7 +23,16 @@ function mockQueryResult(traceId = "trace_x402") {
     timestamp: new Date().toISOString(),
     traceId,
     items: [],
-    source: "deterministic-fallback"
+    source: "deterministic-fallback",
+    execution: {
+      providerId: "search.basic",
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "deterministic-provider",
+      latencyEstimateMs: 700,
+      observedDurationMs: 8,
+      circuitBreakerState: "closed"
+    }
   });
 }
 

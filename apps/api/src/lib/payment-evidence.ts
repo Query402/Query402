@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { NextFunction, Request, Response } from "express";
 import type { PaymentAttempt, QueryMode, UsageEvent } from "@query402/shared";
+import { buildPaymentProofLinks } from "@query402/shared";
 import type {
   PaymentPayload,
   PaymentRequirements,
@@ -390,7 +391,14 @@ export function paymentEvidenceSummary(evidence: PaymentEvidence) {
     payTo: evidence.payTo,
     facilitatorUrl: evidence.facilitatorUrl,
     payer: evidence.payer,
-    transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined
+    transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined,
+    proofLinks: buildPaymentProofLinks({
+      transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined,
+      payerPublicKey: evidence.payer,
+      payToAddress: evidence.payTo,
+      network: evidence.network,
+      asset: evidence.asset
+    })
   };
 }
 

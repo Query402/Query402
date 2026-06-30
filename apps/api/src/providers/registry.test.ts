@@ -78,6 +78,12 @@ describe("ProviderRegistry", () => {
     const result = await registry.execute("search", "test.search.live", "test-query");
     expect(result.source).toBe("live");
     expect(result.items[0].title).toBe("Live Result for test-query");
+    expect(result.execution).toMatchObject({
+      providerId: "test.search.live",
+      source: "live",
+      usedFallback: false,
+      latencyEstimateMs: 100
+    });
   });
 
   it("falls back to deterministic data if deterministic provider", async () => {
@@ -88,6 +94,12 @@ describe("ProviderRegistry", () => {
     const result = await registry.execute("search", "test.search.deterministic", "test-query");
     expect(result.source).toBe("deterministic-fallback");
     expect(result.items[0].title).toBe("Fallback Result for test-query");
+    expect(result.execution).toMatchObject({
+      providerId: "test.search.deterministic",
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "deterministic-provider"
+    });
   });
 
   it("falls back gracefully when unhealthy", async () => {
@@ -100,6 +112,27 @@ describe("ProviderRegistry", () => {
     expect(result.source).toBe("deterministic-fallback");
     expect(result.items[0].title).toBe("Fallback Result for test-query");
     expect(adapter.callCount).toBe(0);
+    expect(result.execution).toMatchObject({
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "unhealthy"
+    });
+  });
+
+  it("marks timeouts as fallback metadata", async () => {
+    const registry = new DefaultProviderRegistry({ maxFailures: 3, cooldownMs: 30000, timeoutMs: 1 });
+    const adapter = new MockAdapter("test.search.live");
+    adapter.executionDelay = 10;
+    registry.register(adapter);
+
+    const result = await registry.execute("search", "test.search.live", "test-query");
+
+    expect(result.source).toBe("deterministic-fallback");
+    expect(result.execution).toMatchObject({
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "timeout"
+    });
   });
 
   it("trips circuit breaker and recovers", async () => {

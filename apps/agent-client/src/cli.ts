@@ -67,6 +67,17 @@ async function main() {
     console.log(`Trace ID: ${trace}`);
   }
 
+  const evidence = payload?.payment?.evidence;
+  if (evidence?.proofLinks) {
+    const links = evidence.proofLinks;
+    console.log("\n--- Payment Proof Links ---");
+    console.log(`Transaction: ${links.transaction}`);
+    console.log(`Payer:       ${links.payer}`);
+    console.log(`Pay-to:      ${links.payTo}`);
+    console.log(`Network:     ${links.network}`);
+    console.log(`Asset:       ${links.asset}`);
+  }
+
   console.log("Response summary:");
   console.log(JSON.stringify(payload, null, 2));
 }

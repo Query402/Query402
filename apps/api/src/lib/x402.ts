@@ -10,6 +10,7 @@ import type { HTTPRequestContext } from "@x402/core/server";
 import type { PaymentPayload } from "@x402/core/types";
 import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
 import { config } from "./config.js";
+import { buildPaymentDebugMetadata } from "./payment-debug.js";
 import {
   buildDemoPaymentEvidence,
   buildEvidenceFromHttpContext,
@@ -18,6 +19,7 @@ import {
   persistPaymentEvidence,
   requestFromHttpContext,
   requirementsFromPaymentHeader,
+  routeModeFromPath,
   setPaymentEvidence
 } from "./payment-evidence.js";
 
@@ -84,9 +86,21 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
   const routeKey = `${req.method.toUpperCase()} ${req.path}`;
   const price = protectedRouteBasePrices[routeKey] ?? "$0.01";
 
+  const providerId = Array.isArray(req.query.provider)
+    ? req.query.provider[0]
+    : (req.query.provider ?? "unknown");
+
+  const debug = buildPaymentDebugMetadata({
+    failureType: "payment_required",
+    route: req.path,
+    providerId: typeof providerId === "string" ? providerId : "unknown",
+    expectedPrice: price
+  });
+
   return res.status(402).json({
     error: "Payment Required",
     demoMode: true,
+    debug,
     accepts: {
       scheme: "exact",
       network: config.STELLAR_NETWORK,
@@ -145,9 +159,22 @@ export function createX402Middleware() {
       (req as EvidenceRequest).paymentEvidencePersisted = true;
     }
 
+    const providerId = getProviderFromContext(context) ?? "unknown";
+    const mode = routeModeFromPath(context.path) ?? "search";
+    const expectedPrice = resolveRoutePrice(context, mode);
+
+    const debug = buildPaymentDebugMetadata({
+      failureType: "settlement_failed",
+      route: context.path,
+      providerId,
+      expectedPrice,
+      facilitatorStatus: settleResult.errorReason,
+      paymentHeader: context.paymentHeader
+    });
+
     return {
       contentType: "application/json",
-      body: { error: "Payment settlement failed", type: "payment_settlement_failed" }
+      body: { error: "Payment settlement failed", type: "payment_settlement_failed", debug }
     };
   };
 
@@ -211,5 +238,38 @@ export function createX402Middleware() {
   });
 
   const httpServer = new x402HTTPResourceServer(resourceServer, routeConfig);
-  return paymentMiddlewareFromHTTPServer(httpServer);
+  const paymentMiddleware = paymentMiddlewareFromHTTPServer(httpServer);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const originalJson = res.json.bind(res);
+    res.json = function (body: unknown) {
+      if (res.statusCode === 402 && body && typeof body === "object" && !("debug" in (body as Record<string, unknown>))) {
+        const pId = Array.isArray(req.query.provider)
+          ? req.query.provider[0]
+          : (req.query.provider ?? "unknown");
+        const paymentHeader = req.header("payment-signature") ?? req.header("x-payment") ?? undefined;
+        const mode = routeModeFromPath(req.path);
+        let expectedPrice = "$0.01";
+        if (mode) {
+          expectedPrice = basePriceByMode[mode as RouteMode];
+          if (typeof pId === "string") {
+            const p = getProviderById(pId);
+            if (p && p.category === mode) {
+              expectedPrice = formatUsdPrice(p.priceUsd);
+            }
+          }
+        }
+        const debug = buildPaymentDebugMetadata({
+          failureType: "payment_required",
+          route: req.path,
+          providerId: typeof pId === "string" ? pId : "unknown",
+          expectedPrice,
+          paymentHeader
+        });
+        return originalJson({ ...(body as Record<string, unknown>), debug });
+      }
+      return originalJson(body);
+    };
+    return paymentMiddleware(req, res, next);
+  };
 }

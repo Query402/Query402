@@ -50,3 +50,57 @@ describe("provider pricing", () => {
     expect(getProviderById("missing.provider")).toBeUndefined();
   });
 });
+
+describe("provider catalog baseline", () => {
+  interface BaselineRow {
+    id: string;
+    category: string;
+    priceUsd: number;
+    enabled: boolean;
+    sourceType: string;
+  }
+
+  // These are the canonical baseline providers the demo and SCF pitch depend on.
+  // Changing any field here requires intentional review — the test will surface
+  // exactly which row and field drifted.
+  const baseline: BaselineRow[] = [
+    {
+      id: "search.basic",
+      category: "search",
+      priceUsd: 0.01,
+      enabled: true,
+      sourceType: "deterministic-fallback"
+    },
+    {
+      id: "news.fast",
+      category: "news",
+      priceUsd: 0.015,
+      enabled: true,
+      sourceType: "deterministic-fallback"
+    },
+    {
+      id: "scrape.page",
+      category: "scrape",
+      priceUsd: 0.02,
+      enabled: true,
+      sourceType: "deterministic-fallback"
+    }
+  ];
+
+  for (const expected of baseline) {
+    it(`baseline provider "${expected.id}" matches expected catalog entry`, () => {
+      const actual = providers.find((p) => p.id === expected.id);
+      expect(
+        actual,
+        `Provider "${expected.id}" is missing — was it renamed or removed?`
+      ).toBeDefined();
+
+      const rowLabel = `Provider "${expected.id}"`;
+      expect(actual!.id, `${rowLabel} id mismatch`).toBe(expected.id);
+      expect(actual!.category, `${rowLabel} category mismatch`).toBe(expected.category);
+      expect(actual!.priceUsd, `${rowLabel} priceUsd mismatch`).toBe(expected.priceUsd);
+      expect(actual!.enabled, `${rowLabel} enabled mismatch`).toBe(expected.enabled);
+      expect(actual!.sourceType, `${rowLabel} sourceType mismatch`).toBe(expected.sourceType);
+    });
+  }
+});
