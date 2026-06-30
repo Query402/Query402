@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ProviderDefinition, QueryMode, SponsorshipPreview } from "@query402/shared";
 import {
   Activity,
+  AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
   Clock4,
@@ -688,6 +689,11 @@ export default function ControlDeckPage() {
                             : ""
                         }`
                       : ""}
+                    {usage.priceOutlier ? (
+                      <span className="price-outlier-warning" title={usage.priceOutlierReason}>
+                        <AlertTriangle size={12} /> Price outlier
+                      </span>
+                    ) : null}
                   </small>
                 </div>
               ))

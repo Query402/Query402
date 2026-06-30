@@ -76,6 +76,8 @@ export interface AnalyticsResponse {
       observedDurationMs: number;
       circuitBreakerState?: string;
     };
+    priceOutlier?: boolean;
+    priceOutlierReason?: string;
   }>;
 }
 

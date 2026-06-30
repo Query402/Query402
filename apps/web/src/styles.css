@@ -1248,6 +1248,25 @@ body {
   font-size: 0.7rem;
 }
 
+.price-outlier-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.3rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: rgba(255, 166, 0, 0.15);
+  color: #ffb347;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: help;
+}
+
+.price-outlier-warning svg {
+  width: 10px;
+  height: 10px;
+}
+
 .script-panel pre {
   margin: 0;
   white-space: pre-wrap;
