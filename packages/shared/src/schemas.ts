@@ -57,3 +57,49 @@ export const sponsorshipChallengeSchema = z.object({
   message: z.string().min(1),
   expiresAt: z.string().datetime({ offset: true })
 });
+
+export const sourceTypeSchema = z.enum(["live", "deterministic-fallback", "unavailable"]);
+
+export const providerResultItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  score: z.number()
+});
+
+export const queryResultSchema = z.object({
+  mode: queryModeSchema,
+  providerId: z.string(),
+  providerName: z.string(),
+  priceUsd: z.number().nonnegative(),
+  latencyMs: z.number().int().nonnegative(),
+  timestamp: z.string(),
+  traceId: z.string(),
+  items: z.array(providerResultItemSchema),
+  source: sourceTypeSchema,
+  raw: z.record(z.unknown()).optional()
+});
+
+export const evidenceSummarySchema = z.object({
+  kind: z.string(),
+  status: z.string(),
+  network: z.string(),
+  asset: z.string().optional(),
+  amount: z.string().optional(),
+  payTo: z.string(),
+  facilitatorUrl: z.string(),
+  payer: z.string().optional(),
+  transactionHash: z.string().optional()
+});
+
+export const paidPaymentSchema = z.object({
+  network: z.string(),
+  facilitatorUrl: z.string(),
+  evidence: evidenceSummarySchema.optional()
+});
+
+export const paidQueryResponseSchema = z.object({
+  traceId: z.string(),
+  payment: paidPaymentSchema,
+  result: queryResultSchema
+});

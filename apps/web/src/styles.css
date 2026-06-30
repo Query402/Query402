@@ -884,6 +884,54 @@ body {
   margin: 0;
 }
 
+.trace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.trace-label {
+  color: #6a8bb0;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.trace-value {
+  flex: 1;
+  color: #cddfff;
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trace-copy-btn {
+  background: rgba(76, 144, 226, 0.15);
+  border: 1px solid rgba(76, 144, 226, 0.35);
+  border-radius: 6px;
+  color: #8bb9ff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.trace-copy-btn:hover {
+  background: rgba(76, 144, 226, 0.3);
+  border-color: rgba(76, 144, 226, 0.6);
+  color: #cde0ff;
+}
+
+.trace-copy-btn:active {
+  background: rgba(76, 144, 226, 0.45);
+}
+
 .item-stack {
   margin-top: 0.6rem;
   display: grid;

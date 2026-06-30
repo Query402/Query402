@@ -1,10 +1,21 @@
 import type { ProviderDefinition, QueryMode, QueryResult } from "@query402/shared";
 
 export interface PaidQueryResponse {
+  traceId: string;
   payment: {
     network: string;
     facilitatorUrl: string;
-    paymentResponseHeader: string | null;
+    evidence?: {
+      kind: string;
+      status: string;
+      network: string;
+      asset?: string;
+      amount?: string;
+      payTo: string;
+      facilitatorUrl: string;
+      payer?: string;
+      transactionHash?: string;
+    };
   };
   result: QueryResult;
 }

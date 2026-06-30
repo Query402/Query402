@@ -427,14 +427,27 @@ export default function ControlDeckPage() {
                   <span>{result.result.providerName}</span>
                   <span>{money(result.result.priceUsd)}</span>
                   <span>{result.result.latencyMs}ms</span>
-                  <span>{result.result.traceId.slice(0, 12)}</span>
                   <span className={`source-badge ${result.result.source}`}>
                     Source: {result.result.source}
                   </span>
                 </div>
 
                 <div className="trace-box">
-                  <p>payment-response: {result.payment.paymentResponseHeader ?? "<none>"}</p>
+                  <p className="trace-row">
+                    <span className="trace-label">Trace ID</span>
+                    <code className="trace-value">{result.traceId}</code>
+                    <button
+                      type="button"
+                      className="trace-copy-btn"
+                      onClick={() => navigator.clipboard.writeText(result.traceId)}
+                      title="Copy trace ID"
+                    >
+                      Copy
+                    </button>
+                  </p>
+                  <p>
+                    evidence: {result.payment.evidence?.status ?? result.payment.evidence?.kind ?? "none"}
+                  </p>
                   <p>network: {result.payment.network}</p>
                 </div>
 
