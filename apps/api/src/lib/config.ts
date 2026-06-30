@@ -115,10 +115,7 @@ export function getConfigSnapshot(): ConfigSnapshot {
     sponsorshipEnabled: config.sponsorshipEnabled,
     sponsorshipSigningSecretConfigured: Boolean(config.SPONSORSHIP_SIGNING_SECRET),
     anyProviderKeyConfigured: Boolean(
-      config.BRAVE_API_KEY ||
-        config.SERPAPI_API_KEY ||
-        config.NEWS_API_KEY ||
-        config.GROQ_API_KEY
+      config.BRAVE_API_KEY || config.SERPAPI_API_KEY || config.NEWS_API_KEY || config.GROQ_API_KEY
     )
   };
 }

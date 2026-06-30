@@ -204,7 +204,9 @@ export function previewSponsoredRun(input: PreviewSponsoredRunInput): PreviewRes
   const provider = getProviderById(input.provider);
   const providerName = provider?.name ?? input.provider;
   const quotedPriceUsd = provider?.priceUsd ?? 0;
-  const priceFitsGrant = provider ? quotedPriceUsd <= config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD : false;
+  const priceFitsGrant = provider
+    ? quotedPriceUsd <= config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD
+    : false;
 
   const walletSpent = readBudgetSpent("wallet", input.wallet);
   const globalSpent = readBudgetSpent("global", null);
@@ -212,9 +214,7 @@ export function previewSponsoredRun(input: PreviewSponsoredRunInput): PreviewRes
     limitUsd: config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD,
     spentUsd: walletSpent,
     remainingUsd: Math.max(
-      Number(
-        (config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD - walletSpent).toFixed(6)
-      ),
+      Number((config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD - walletSpent).toFixed(6)),
       0
     ),
     windowStart
@@ -223,9 +223,7 @@ export function previewSponsoredRun(input: PreviewSponsoredRunInput): PreviewRes
     limitUsd: config.SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD,
     spentUsd: globalSpent,
     remainingUsd: Math.max(
-      Number(
-        (config.SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD - globalSpent).toFixed(6)
-      ),
+      Number((config.SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD - globalSpent).toFixed(6)),
       0
     ),
     windowStart
@@ -322,9 +320,7 @@ export function previewSponsoredRun(input: PreviewSponsoredRunInput): PreviewRes
   });
 
   const expiresInSeconds = Math.max(
-    Math.floor(
-      (new Date(synthesized.grant.expiresAt).getTime() - Date.now()) / 1000
-    ),
+    Math.floor((new Date(synthesized.grant.expiresAt).getTime() - Date.now()) / 1000),
     0
   );
 

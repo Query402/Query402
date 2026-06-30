@@ -1,6 +1,10 @@
 import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult } from "./core.js";
 import { getProviderById } from "../lib/pricing.js";
-import type { CircuitBreakerState, ExecutionFallbackReason, ProviderExecutionMetadata } from "@query402/shared";
+import type {
+  CircuitBreakerState,
+  ExecutionFallbackReason,
+  ProviderExecutionMetadata
+} from "@query402/shared";
 
 interface CircuitBreakerConfig {
   maxFailures: number;
