@@ -78,7 +78,7 @@ Optional common fields:
 When `DEMO_MODE=true`, protected routes return a 402 response on first request:
 
 ```bash
-curl http://localhost:3000/x402/search?provider=search.basic&q=stellar
+curl http://localhost:3001/x402/search?provider=search.basic&q=stellar
 ```
 
 Response (status 402):
@@ -103,7 +103,7 @@ Response (status 402):
 Include `x-query402-demo-paid: true` to bypass payment verification:
 
 ```bash
-curl http://localhost:3000/x402/search?provider=search.basic&q=stellar \
+curl http://localhost:3001/x402/search?provider=search.basic&q=stellar \
   -H "x-query402-demo-paid: true"
 ```
 
@@ -170,7 +170,7 @@ npm run dev:api
 Execute a demo-paid search request:
 
 ```bash
-curl http://localhost:3000/x402/search?provider=search.basic&q="stellar soroban" \
+curl http://localhost:3001/x402/search?provider=search.basic&q="stellar soroban" \
   -H "x-query402-demo-paid: true" \
   -H "x-demo-payer: my-test-wallet"
 ```
@@ -219,24 +219,26 @@ Expected result:
 Payment evidence is stored in the analytics database alongside usage events. Retrieve recent payment attempts:
 
 ```bash
-curl http://localhost:3000/api/usage?limit=10
+curl http://localhost:3001/api/usage?limit=10
 ```
 
-The response includes both usage events and recent payment attempts:
+The response includes usage events with pagination metadata:
 
 ```json
 {
   "usage": [/* UsageEvent[] */],
-  "total": 42,
-  "limit": 10,
-  "offset": 0
+  "pagination": {
+    "limit": 10,
+    "offset": 0,
+    "count": 10
+  }
 }
 ```
 
 Analytics summary includes spend breakdown by payment kind:
 
 ```bash
-curl http://localhost:3000/api/analytics
+curl http://localhost:3001/api/analytics
 ```
 
 Response includes:
