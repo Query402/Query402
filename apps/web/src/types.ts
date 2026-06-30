@@ -65,6 +65,7 @@ export interface AnalyticsResponse {
     providerId: string;
     status: string;
     createdAt: string;
+    transactionHash?: string;
     paymentSource?: string;
   }>;
   recentTransactions: Array<{
