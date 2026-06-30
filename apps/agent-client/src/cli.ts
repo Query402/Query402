@@ -1,6 +1,41 @@
 import { runPaidQuery } from "./client.js";
 
-type QueryMode = "search" | "news" | "scrape";
+export type QueryMode = "search" | "news" | "scrape";
+
+export interface SummaryInput {
+  mode: QueryMode;
+  provider: string;
+  isDemoMode: boolean;
+  status: number;
+  priceUsd?: string | number;
+  asset?: string;
+  traceId?: string;
+  evidenceId?: string;
+  latencyMs?: number;
+}
+
+/** Formats the post-query summary table. Pure function — safe to unit-test directly. */
+export function formatSummary(input: SummaryInput): string {
+  const rows: [string, string][] = [
+    ["Mode",        input.mode],
+    ["Provider",    input.provider],
+    ["Status",      String(input.status)],
+    ["Client",      input.isDemoMode ? "demo" : "real"],
+    ["Price (USD)", input.priceUsd != null ? String(input.priceUsd) : "n/a"],
+    ["Asset",       input.asset ?? "n/a"],
+    ["Trace ID",    input.traceId ?? "unavailable"],
+    ["Evidence ID", input.evidenceId ?? "unavailable"],
+  ];
+  if (input.latencyMs != null) {
+    rows.push(["Latency", `${input.latencyMs}ms`]);
+  }
+  const labelWidth = Math.max(...rows.map(([label]) => label.length));
+  const body = rows
+    .map(([label, value]) => `  ${label.padEnd(labelWidth)}  ${value}`)
+    .join("\n");
+  const divider = "=".repeat(labelWidth + 4 + 20);
+  return `\n=== Query402 Paid Query Summary ===\n${body}\n${divider}`;
+}
 
 function usage() {
   console.log("Usage:");
@@ -43,46 +78,39 @@ async function main() {
     readArg("--provider", args) ??
     (mode === "search" ? "search.basic" : mode === "news" ? "news.fast" : "scrape.page");
 
+  const start = Date.now();
   const result = await runPaidQuery({
     mode,
     provider,
     query: mode === "scrape" ? undefined : term,
     url: mode === "scrape" ? term : undefined
   });
+  const latencyMs = Date.now() - start;
 
-  console.log("\n=== Query402 Paid Request ===");
-  console.log(`Endpoint: ${result.endpoint}`);
-  console.log(`Provider: ${provider}`);
-  console.log(`Status: ${result.status}`);
-  console.log(`Payment Header: ${result.paymentResponse ?? "<none>"}`);
+  const payload = result.body as Record<string, unknown>;
+  const resultBlock = (payload?.result ?? (payload?.body as Record<string, unknown>)?.result) as Record<string, unknown> | undefined;
+  const evidenceBlock = (payload?.payment as Record<string, unknown>)?.evidence as Record<string, unknown> | undefined;
 
-  const payload = result.body as Record<string, any>;
-  const price = payload?.result?.priceUsd ?? payload?.body?.result?.priceUsd;
-  const trace = payload?.result?.traceId ?? payload?.body?.result?.traceId;
-
-  if (price) {
-    console.log(`Price Paid (USD): ${price}`);
-  }
-  if (trace) {
-    console.log(`Trace ID: ${trace}`);
-  }
-
-  const evidence = payload?.payment?.evidence;
-  if (evidence?.proofLinks) {
-    const links = evidence.proofLinks;
-    console.log("\n--- Payment Proof Links ---");
-    console.log(`Transaction: ${links.transaction}`);
-    console.log(`Payer:       ${links.payer}`);
-    console.log(`Pay-to:      ${links.payTo}`);
-    console.log(`Network:     ${links.network}`);
-    console.log(`Asset:       ${links.asset}`);
-  }
-
-  console.log("Response summary:");
-  console.log(JSON.stringify(payload, null, 2));
+  console.log(
+    formatSummary({
+      mode,
+      provider,
+      isDemoMode: result.isDemoMode,
+      status: result.status,
+      priceUsd: resultBlock?.priceUsd as string | number | undefined,
+      asset: (evidenceBlock?.proofLinks as Record<string, string> | undefined)?.asset,
+      traceId: resultBlock?.traceId as string | undefined,
+      evidenceId: (evidenceBlock?.id ?? evidenceBlock?.evidenceId) as string | undefined,
+      latencyMs,
+    })
+  );
 }
 
-main().catch((error) => {
-  console.error("CLI request failed:", error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+import { fileURLToPath } from "node:url";
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error("CLI request failed:", error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

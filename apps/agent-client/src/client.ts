@@ -108,6 +108,7 @@ export async function runPaidQuery(input: {
     status: response.status,
     ok: response.ok,
     paymentResponse: response.headers.get("payment-response"),
+    isDemoMode,
     body: json
   };
 }
