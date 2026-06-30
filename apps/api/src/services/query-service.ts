@@ -23,11 +23,11 @@ function getErrorMessage(error: unknown): string {
 
 function sanitizeErrorMessage(message: string): string {
   return message
+    .replace(/\b(url|targetUrl)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi, "$1=[redacted-url]")
     .replace(
-      /\b(url|targetUrl)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi,
-      "$1=[redacted-url]"
+      /\b(payment-response|x-payment-response|authorization)\b\s*[:=]\s*([^\s,;]+)/gi,
+      "$1=[redacted]"
     )
-    .replace(/\b(payment-response|x-payment-response|authorization)\b\s*[:=]\s*([^\s,;]+)/gi, "$1=[redacted]")
     .replace(
       /\b(query|queryOrUrl|q|secret|api[_ -]?key|token|private[_ -]?key|privateKey|seed)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi,
       "$1=[redacted]"

@@ -158,10 +158,9 @@ describe("x402 payment requirement snapshot", () => {
           it(`resolves provider ${providerCase.id} to ${providerCase.price}`, async () => {
             const { resolveRoutePrice } = await import("../lib/x402.js");
             const price = resolveRoutePrice(makeContext(providerCase.id), routeCase.mode);
-            expect(
-              price,
-              `route=${routeCase.route} provider=${providerCase.id} price drift`
-            ).toBe(providerCase.price);
+            expect(price, `route=${routeCase.route} provider=${providerCase.id} price drift`).toBe(
+              providerCase.price
+            );
           });
         }
       });
@@ -183,10 +182,9 @@ describe("x402 payment requirement snapshot", () => {
       it(`provider ${providerId} priceUsd is ${expectedPrice}`, () => {
         const provider = getProviderById(providerId);
         expect(provider, `provider=${providerId} missing from catalog`).toBeDefined();
-        expect(
-          provider?.priceUsd,
-          `provider=${providerId} priceUsd drifted from snapshot`
-        ).toBe(expectedPrice);
+        expect(provider?.priceUsd, `provider=${providerId} priceUsd drifted from snapshot`).toBe(
+          expectedPrice
+        );
       });
     }
   });
