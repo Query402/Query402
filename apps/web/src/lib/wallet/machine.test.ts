@@ -1,7 +1,6 @@
-import { test, describe } from "node:test";
-import assert from "node:assert";
+import { describe, expect, it } from "vitest";
 import { WalletSessionMachine } from "./machine.js";
-import { WalletAdapter, WalletState, WalletStatus } from "./types.js";
+import { WalletAdapter, WalletState } from "./types.js";
 
 class FakeAdapter implements WalletAdapter {
   id = "fake";
@@ -75,30 +74,30 @@ class FakeAdapter implements WalletAdapter {
 }
 
 describe("WalletSessionMachine", () => {
-  test("connects and sets state correctly", async () => {
+  it("connects and sets state correctly", async () => {
     const machine = new WalletSessionMachine("TESTNET");
     const adapter = new FakeAdapter();
     machine.setAdapter(adapter);
 
-    assert.strictEqual(machine.getState().status, "disconnected");
+    expect(machine.getState().status).toBe("disconnected");
 
     await machine.connect();
 
-    assert.strictEqual(machine.getState().status, "connected");
-    assert.strictEqual(machine.getState().address, "GABC123");
+    expect(machine.getState().status).toBe("connected");
+    expect(machine.getState().address).toBe("GABC123");
   });
 
-  test("handles unsupported wallet", async () => {
+  it("handles unsupported wallet", async () => {
     const machine = new WalletSessionMachine("TESTNET");
     const adapter = new FakeAdapter();
     adapter.capabilities.canSignAuthEntry = false; // unsupported
     machine.setAdapter(adapter);
 
     await machine.connect();
-    assert.strictEqual(machine.getState().status, "unsupported");
+    expect(machine.getState().status).toBe("unsupported");
   });
 
-  test("handles wrong network", async () => {
+  it("handles wrong network", async () => {
     const machine = new WalletSessionMachine("PUBLIC");
     const adapter = new FakeAdapter();
     adapter.mockState = {
@@ -110,48 +109,45 @@ describe("WalletSessionMachine", () => {
     machine.setAdapter(adapter);
 
     await machine.connect();
-    assert.strictEqual(machine.getState().status, "wrong-network");
+    expect(machine.getState().status).toBe("wrong-network");
   });
 
-  test("transitions to signing and back", async () => {
+  it("transitions to signing and back", async () => {
     const machine = new WalletSessionMachine("TESTNET");
     const adapter = new FakeAdapter();
     machine.setAdapter(adapter);
     await machine.connect();
 
     const promise = machine.signTransaction("tx_xdr");
-    assert.strictEqual(machine.getState().status, "signing");
+    expect(machine.getState().status).toBe("signing");
     await promise;
-    assert.strictEqual(machine.getState().status, "connected");
+    expect(machine.getState().status).toBe("connected");
   });
 
-  test("handles user rejection during signing", async () => {
+  it("handles user rejection during signing", async () => {
     const machine = new WalletSessionMachine("TESTNET");
     const adapter = new FakeAdapter();
     machine.setAdapter(adapter);
     await machine.connect();
 
     adapter.mockRejectSign = true;
-    try {
-      await machine.signTransaction("tx_xdr");
-      assert.fail("Should throw");
-    } catch (e) {
-      assert.strictEqual(machine.getState().status, "rejected");
-    }
+
+    await expect(machine.signTransaction("tx_xdr")).rejects.toThrow();
+    expect(machine.getState().status).toBe("rejected");
   });
 
-  test("detects account/network changes via watcher", async () => {
+  it("detects account/network changes via watcher", async () => {
     const machine = new WalletSessionMachine("TESTNET");
     const adapter = new FakeAdapter();
     machine.setAdapter(adapter);
     await machine.connect();
 
-    assert.strictEqual(machine.getState().status, "connected");
+    expect(machine.getState().status).toBe("connected");
 
     adapter.simulateNetworkChange("PUBLIC", "TESTNET");
-    assert.strictEqual(machine.getState().status, "wrong-network");
+    expect(machine.getState().status).toBe("wrong-network");
 
     adapter.simulateNetworkChange("TESTNET", "TESTNET");
-    assert.strictEqual(machine.getState().status, "connected");
+    expect(machine.getState().status).toBe("connected");
   });
 });
