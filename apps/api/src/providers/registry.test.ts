@@ -120,7 +120,11 @@ describe("ProviderRegistry", () => {
   });
 
   it("marks timeouts as fallback metadata", async () => {
-    const registry = new DefaultProviderRegistry({ maxFailures: 3, cooldownMs: 30000, timeoutMs: 1 });
+    const registry = new DefaultProviderRegistry({
+      maxFailures: 3,
+      cooldownMs: 30000,
+      timeoutMs: 1
+    });
     const adapter = new MockAdapter("test.search.live");
     adapter.executionDelay = 10;
     registry.register(adapter);
