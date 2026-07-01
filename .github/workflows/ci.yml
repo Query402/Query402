@@ -23,13 +23,19 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Pin npm version
-        # Match the exact npm version the lockfile was generated with —
-        # npm 11.x patches drift slightly in transitive resolution.
-        run: npm install -g npm@11.9.0 --no-audit --no-fund && hash -r && npm -v
+      - name: Verify corepack-managed npm
+        # setup-node@v4 reads `packageManager` in package.json and routes
+        # npm through corepack. Smoke-check that the pinned version
+        # actually took effect so a missing corepack on a future runner
+        # fails loudly here instead of silently corrupting the lockfile
+        # sync check downstream.
+        run: |
+          v=$(npm -v)
+          echo "npm -v → $v"
+          [[ "$v" == "11.9.0" ]] || (echo "::error::npm pin failed: got '$v', expected 11.9.0" && exit 1)
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund --legacy-peer-deps
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
