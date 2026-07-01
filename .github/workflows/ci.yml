@@ -22,19 +22,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        # Use `npm install` rather than `npm ci` because the bundled
-        # npm in CI's Node 24.x drifts slightly in transitive resolution
-        # from a green locally-locked manifest, and `npm ci` strict
-        # sync-check EUSAGE-exits. The `overrides` block in
-        # `package.json` pins the few problematic typescript-eslint
-        # / vite-plugin-react / react-refresh versions to the same
-        # versions locally resolves to, so this command is stable
-        # across npm patch drift and does *not* upgrade
-        # typescript-eslint past the breaking change that removed
-        # `@typescript-eslint/utils/ast-utils` from its exports.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
