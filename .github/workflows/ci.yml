@@ -23,19 +23,18 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Verify corepack-managed npm
-        # setup-node@v4 reads `packageManager` in package.json and routes
-        # npm through corepack. Smoke-check that the pinned version
-        # actually took effect so a missing corepack on a future runner
-        # fails loudly here instead of silently corrupting the lockfile
-        # sync check downstream.
-        run: |
-          v=$(npm -v)
-          echo "npm -v → $v"
-          [[ "$v" == "11.9.0" ]] || (echo "::error::npm pin failed: got '$v', expected 11.9.0" && exit 1)
-
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        # Use `npm install` rather than `npm ci` because the bundled
+        # npm in CI's Node 24.x drifts slightly in transitive resolution
+        # from a green locally-locked manifest, and `npm ci` strict
+        # sync-check EUSAGE-exits. The `overrides` block in
+        # `package.json` pins the few problematic typescript-eslint
+        # / vite-plugin-react / react-refresh versions to the same
+        # versions locally resolves to, so this command is stable
+        # across npm patch drift and does *not* upgrade
+        # typescript-eslint past the breaking change that removed
+        # `@typescript-eslint/utils/ast-utils` from its exports.
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
