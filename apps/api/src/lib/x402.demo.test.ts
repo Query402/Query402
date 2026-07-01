@@ -88,6 +88,7 @@ describe("demo-mode x402 flow", () => {
       .set("payment-response", "demo-proof-123");
 
     expect(response.status).toBe(200);
+    expect(response.body.traceId).toBe(response.body.result.traceId);
     expect(response.body.result.priceUsd).toBe(0.02);
     expect(response.body.payment.evidence).toMatchObject({
       kind: "demo",

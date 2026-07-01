@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ProviderDefinition, QueryMode, SponsorshipPreview } from "@query402/shared";
 import {
   Activity,
+  AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
   Clock4,
@@ -502,7 +503,6 @@ export default function ControlDeckPage() {
                   <span>{result.result.providerName}</span>
                   <span>{money(result.result.priceUsd)}</span>
                   <span>{result.result.latencyMs}ms</span>
-                  <span>{result.result.traceId.slice(0, 12)}</span>
                   <span className={`source-badge ${result.result.source}`}>
                     Source: {result.result.source}
                   </span>
@@ -520,7 +520,22 @@ export default function ControlDeckPage() {
                 />
 
                 <div className="trace-box">
-                  <p>payment-response: {result.payment.paymentResponseHeader ?? "<none>"}</p>
+                  <p className="trace-row">
+                    <span className="trace-label">Trace ID</span>
+                    <code className="trace-value">{result.traceId}</code>
+                    <button
+                      type="button"
+                      className="trace-copy-btn"
+                      onClick={() => navigator.clipboard.writeText(result.traceId)}
+                      title="Copy trace ID"
+                    >
+                      Copy
+                    </button>
+                  </p>
+                  <p>
+                    evidence:{" "}
+                    {result.payment.evidence?.status ?? result.payment.evidence?.kind ?? "none"}
+                  </p>
                   <p>network: {result.payment.network}</p>
                   {result.payment.evidence?.proofLinks && (
                     <div className="proof-links">
@@ -700,6 +715,11 @@ export default function ControlDeckPage() {
                             : ""
                         }`
                       : ""}
+                    {usage.priceOutlier ? (
+                      <span className="price-outlier-warning" title={usage.priceOutlierReason}>
+                        <AlertTriangle size={12} /> Price outlier
+                      </span>
+                    ) : null}
                   </small>
                 </div>
               ))

@@ -1,5 +1,19 @@
 import { config } from "./config.js";
 import { runPaidQuery } from "./client.js";
+import { fileURLToPath } from "node:url";
+
+export function safeFacilitatorUrl(url?: string): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+export function formatTimestamp(): string {
+  return new Date().toISOString();
+}
 
 function hasPlaceholder(value?: string) {
   if (!value) {
@@ -64,7 +78,39 @@ async function main() {
   console.log("\n=== Query402 Real Payment Validation ===");
   console.log(`API: ${config.API_BASE_URL}`);
   console.log(`Network: ${config.STELLAR_NETWORK}`);
-  console.log(`Facilitator: ${config.X402_FACILITATOR_URL}`);
+
+  const network = config.STELLAR_NETWORK;
+  const probeTimestamp = formatTimestamp();
+  const facilitatorHost = safeFacilitatorUrl(config.X402_FACILITATOR_URL);
+
+  console.log("\n--- Facilitator Health ---");
+  if (!config.X402_FACILITATOR_URL) {
+    console.log(`Host: not configured`);
+    console.log(`Warning: X402_FACILITATOR_URL is not set. Set it in your .env file for real payment validation.`);
+    console.log(`Probe attempted: no`);
+    console.log(`Network: ${network}`);
+    console.log(`Timestamp: ${probeTimestamp}`);
+    throw new Error("X402_FACILITATOR_URL is not configured. Real payment validation requires a facilitator URL.");
+  } else {
+    console.log(`Host: ${facilitatorHost ?? "unparseable"}`);
+    console.log(`Network: ${network}`);
+    console.log("[probe] Checking facilitator /supported...");
+    const healthResult = await checkFacilitator(config.X402_FACILITATOR_URL);
+    const reasonText = healthResult.ok ? undefined : typeof healthResult.body === "string" ? healthResult.body : JSON.stringify(healthResult.body);
+    console.log(`Probe attempted: yes`);
+    console.log(`Status: ${healthResult.status === 0 ? "N/A" : healthResult.status}`);
+    if (!healthResult.ok && reasonText) {
+      console.log(`Reason: ${reasonText}`);
+    }
+    console.log(`Timestamp: ${probeTimestamp}`);
+
+    if (!healthResult.ok) {
+      throw new Error(
+        `Facilitator check failed (${healthResult.status}): ${reasonText}`
+      );
+    }
+    console.log("[ok] Facilitator reachable and returned /supported response.");
+  }
 
   if (config.DEMO_MODE === "true") {
     throw new Error("DEMO_MODE=true. Real payment validation requires DEMO_MODE=false.");
@@ -89,7 +135,7 @@ async function main() {
   }
 
   if (
-    config.X402_FACILITATOR_URL.includes("channels.openzeppelin.com") &&
+    config.X402_FACILITATOR_URL?.includes("channels.openzeppelin.com") &&
     !config.X402_FACILITATOR_API_KEY
   ) {
     throw new Error(
@@ -100,16 +146,6 @@ async function main() {
   console.log("[step] Checking API health...");
   await checkApiHealth();
   console.log("[ok] API health check passed.");
-
-  console.log("[step] Checking facilitator /supported...");
-  const facilitator = await checkFacilitator(config.X402_FACILITATOR_URL);
-  if (!facilitator.ok) {
-    throw new Error(
-      `Facilitator check failed (${facilitator.status}): ${String(facilitator.body)}`
-    );
-  }
-
-  console.log("[ok] Facilitator reachable and returned /supported response.");
 
   console.log("[step] Executing real paid request...");
   const result = await runPaidQuery({
@@ -142,7 +178,10 @@ async function main() {
   console.log("\n✅ Real payment validation completed.");
 }
 
-main().catch((error) => {
-  console.error("\n❌ Validation failed:", error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMainModule) {
+  main().catch((error) => {
+    console.error("\n❌ Validation failed:", error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

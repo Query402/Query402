@@ -93,3 +93,17 @@ export function getProviderById(providerId: string) {
 export function getProvidersByCategory(category: ProviderDefinition["category"]) {
   return providers.filter((provider) => provider.category === category && provider.enabled);
 }
+
+export function getSortedProviders(): ProviderDefinition[] {
+  return [...providers]
+    .filter((provider) => provider.enabled)
+    .sort((a, b) => {
+      const categoryCompare = a.category.localeCompare(b.category);
+      if (categoryCompare !== 0) return categoryCompare;
+
+      const priceCompare = a.priceUsd - b.priceUsd;
+      if (priceCompare !== 0) return priceCompare;
+
+      return a.id.localeCompare(b.id);
+    });
+}

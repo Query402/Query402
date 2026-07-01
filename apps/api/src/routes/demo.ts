@@ -182,12 +182,14 @@ paidRouter.post("/api/paid/run", async (req, res, next) => {
     if (!output.ok) {
       releaseBudget(grant.wallet, quotedPriceUsd);
       abortIdempotency(req);
+      const payload = output.payload as { result?: QueryResult } | undefined;
       return res.status(502).json({
         error: "Payment execution failed",
         status: output.status,
         payload: output.payload,
         grantId: grant.grantId,
-        decision: policy.decision
+        decision: policy.decision,
+        traceId: payload?.result?.traceId ?? null
       });
     }
 

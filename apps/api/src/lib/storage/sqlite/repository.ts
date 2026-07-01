@@ -27,7 +27,7 @@ INSERT INTO usage_events (
   execution_source, execution_used_fallback, execution_fallback_reason,
   execution_latency_estimate_ms, execution_observed_duration_ms,
   execution_circuit_breaker_state, sponsorship_grant_id, policy_decision,
-  payment_source, sponsor_public_key
+  payment_source, sponsor_public_key, price_outlier, price_outlier_reason
 ) VALUES (
   @id, @mode, @endpoint, @provider_id, @query_or_url, @price_usd, @network,
   @payment_status, @payment_kind, @payment_tx_hash, @asset, @pay_to_address, @amount,
@@ -35,7 +35,7 @@ INSERT INTO usage_events (
   @execution_source, @execution_used_fallback, @execution_fallback_reason,
   @execution_latency_estimate_ms, @execution_observed_duration_ms,
   @execution_circuit_breaker_state, @sponsorship_grant_id, @policy_decision,
-  @payment_source, @sponsor_public_key
+  @payment_source, @sponsor_public_key, @price_outlier, @price_outlier_reason
 )
 `;
 

@@ -45,7 +45,7 @@ function getProviderFromContext(context: HTTPRequestContext) {
   return rawProvider;
 }
 
-function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
+export function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
   const providerId = getProviderFromContext(context);
   if (!providerId) {
     return basePriceByMode[mode];

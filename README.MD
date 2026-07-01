@@ -146,6 +146,12 @@ npm run test:coverage
 
 Details: [`docs/testing.md`](./docs/testing.md)
 
+## Documentation
+
+- **Testing strategy**: [`docs/testing.md`](./docs/testing.md)
+- **Demo vs real payment evidence**: [`docs/demo-payment-evidence.md`](./docs/demo-payment-evidence.md)
+- **Architecture overview**: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+
 ## Quality gates
 
 Run the same checks locally that CI enforces on pull requests:
