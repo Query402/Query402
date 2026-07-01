@@ -17,22 +17,20 @@ export interface SummaryInput {
 /** Formats the post-query summary table. Pure function — safe to unit-test directly. */
 export function formatSummary(input: SummaryInput): string {
   const rows: [string, string][] = [
-    ["Mode",        input.mode],
-    ["Provider",    input.provider],
-    ["Status",      String(input.status)],
-    ["Client",      input.isDemoMode ? "demo" : "real"],
+    ["Mode", input.mode],
+    ["Provider", input.provider],
+    ["Status", String(input.status)],
+    ["Client", input.isDemoMode ? "demo" : "real"],
     ["Price (USD)", input.priceUsd != null ? String(input.priceUsd) : "n/a"],
-    ["Asset",       input.asset ?? "n/a"],
-    ["Trace ID",    input.traceId ?? "unavailable"],
-    ["Evidence ID", input.evidenceId ?? "unavailable"],
+    ["Asset", input.asset ?? "n/a"],
+    ["Trace ID", input.traceId ?? "unavailable"],
+    ["Evidence ID", input.evidenceId ?? "unavailable"]
   ];
   if (input.latencyMs != null) {
     rows.push(["Latency", `${input.latencyMs}ms`]);
   }
   const labelWidth = Math.max(...rows.map(([label]) => label.length));
-  const body = rows
-    .map(([label, value]) => `  ${label.padEnd(labelWidth)}  ${value}`)
-    .join("\n");
+  const body = rows.map(([label, value]) => `  ${label.padEnd(labelWidth)}  ${value}`).join("\n");
   const divider = "=".repeat(labelWidth + 4 + 20);
   return `\n=== Query402 Paid Query Summary ===\n${body}\n${divider}`;
 }
@@ -88,8 +86,10 @@ async function main() {
   const latencyMs = Date.now() - start;
 
   const payload = result.body as Record<string, unknown>;
-  const resultBlock = (payload?.result ?? (payload?.body as Record<string, unknown>)?.result) as Record<string, unknown> | undefined;
-  const evidenceBlock = (payload?.payment as Record<string, unknown>)?.evidence as Record<string, unknown> | undefined;
+  const resultBlock = (payload?.result ?? (payload?.body as Record<string, unknown>)?.result) as
+    Record<string, unknown> | undefined;
+  const evidenceBlock = (payload?.payment as Record<string, unknown>)?.evidence as
+    Record<string, unknown> | undefined;
 
   console.log(
     formatSummary({
@@ -101,7 +101,7 @@ async function main() {
       asset: (evidenceBlock?.proofLinks as Record<string, string> | undefined)?.asset,
       traceId: resultBlock?.traceId as string | undefined,
       evidenceId: (evidenceBlock?.id ?? evidenceBlock?.evidenceId) as string | undefined,
-      latencyMs,
+      latencyMs
     })
   );
 }

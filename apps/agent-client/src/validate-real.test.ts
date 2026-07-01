@@ -18,9 +18,9 @@ describe("safeFacilitatorUrl", () => {
 
   it("strips auth credentials from URL", async () => {
     const { safeFacilitatorUrl } = await import("./validate-real.js");
-    expect(
-      safeFacilitatorUrl("https://user:password@channels.openzeppelin.com/x402/testnet")
-    ).toBe("channels.openzeppelin.com");
+    expect(safeFacilitatorUrl("https://user:password@channels.openzeppelin.com/x402/testnet")).toBe(
+      "channels.openzeppelin.com"
+    );
   });
 
   it("preserves port in host", async () => {

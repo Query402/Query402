@@ -271,8 +271,18 @@ describe("public routes", () => {
       const { persistPaymentAndUsage } = await import("../lib/persistence.js");
       await persistPaymentAndUsage(
         buildPaidQueryFixture({
-          payment: { id: "pay_fixture_demo_01", status: "demo-paid", evidenceKind: "demo", transactionHash: undefined },
-          usage: { id: "use_fixture_demo_01", paymentStatus: "demo-paid", paymentKind: "demo", paymentTxHash: undefined }
+          payment: {
+            id: "pay_fixture_demo_01",
+            status: "demo-paid",
+            evidenceKind: "demo",
+            transactionHash: undefined
+          },
+          usage: {
+            id: "use_fixture_demo_01",
+            paymentStatus: "demo-paid",
+            paymentKind: "demo",
+            paymentTxHash: undefined
+          }
         })
       );
 

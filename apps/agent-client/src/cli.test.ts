@@ -54,7 +54,7 @@ describe("formatSummary", () => {
     asset: "USDC",
     traceId: "trace-abc-123",
     evidenceId: "ev-xyz-789",
-    latencyMs: 342,
+    latencyMs: 342
   };
 
   it("includes mode and provider", () => {

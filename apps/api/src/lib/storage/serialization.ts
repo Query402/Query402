@@ -217,9 +217,7 @@ export function rowToUsageEvent(row: Record<string, unknown>): UsageEvent {
       : undefined,
     sponsorPublicKey: row.sponsor_public_key ? String(row.sponsor_public_key) : undefined,
     priceOutlier: priceOutlier || undefined,
-    priceOutlierReason: row.price_outlier_reason
-      ? String(row.price_outlier_reason)
-      : undefined
+    priceOutlierReason: row.price_outlier_reason ? String(row.price_outlier_reason) : undefined
   };
 }
 
