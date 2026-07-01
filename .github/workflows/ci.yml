@@ -23,10 +23,13 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - name: Pin npm version
+        # Match the exact npm version the lockfile was generated with —
+        # npm 11.x patches drift slightly in transitive resolution.
+        run: npm install -g npm@11.9.0 --no-audit --no-fund && hash -r && npm -v
+
       - name: Install dependencies
-        # Use `npm install`: `npm ci` EUSAGE-fails on npm 11.x transitive
-        # resolution drift in the runner image.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
 
       - name: Typecheck
         run: npm run typecheck
