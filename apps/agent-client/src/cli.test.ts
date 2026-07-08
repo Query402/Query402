@@ -86,7 +86,7 @@ describe("buildReceipt", () => {
       provider: "search.basic",
       term: "test query",
       price: 0.01,
-      traceId: "trace_abc123",
+      traceId: "trace_abc123"
     });
 
     expect(receipt).toEqual({
@@ -94,7 +94,7 @@ describe("buildReceipt", () => {
       provider: "search.basic",
       input: "test query",
       price: 0.01,
-      traceId: "trace_abc123",
+      traceId: "trace_abc123"
     });
   });
 
@@ -103,7 +103,7 @@ describe("buildReceipt", () => {
     const receipt = buildReceipt({
       mode: "scrape",
       provider: "scrape.page",
-      term: "https://example.com",
+      term: "https://example.com"
     });
 
     expect(receipt).toEqual({
@@ -111,7 +111,7 @@ describe("buildReceipt", () => {
       provider: "scrape.page",
       input: "https://example.com",
       price: null,
-      traceId: null,
+      traceId: null
     });
   });
 
@@ -123,7 +123,7 @@ describe("buildReceipt", () => {
       provider: "search.basic",
       term: long,
       price: 0.05,
-      traceId: "trace_xyz",
+      traceId: "trace_xyz"
     });
 
     expect(receipt.input).toBe("a".repeat(47) + "...");

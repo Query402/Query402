@@ -74,7 +74,7 @@ export function buildReceipt(input: {
     provider: input.provider,
     input: redactInput(input.term),
     price: input.price ?? null,
-    traceId: input.traceId ?? null,
+    traceId: input.traceId ?? null
   };
 }
 

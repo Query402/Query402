@@ -17,13 +17,15 @@ export function getPaymentEvidenceInfo(
     return {
       status: "missing",
       title: "Missing Payment Evidence",
-      description: "No verified payment evidence was found for this query execution. Intents should always settle via x402.",
+      description:
+        "No verified payment evidence was found for this query execution. Intents should always settle via x402.",
       className: "payment-banner--missing"
     };
   }
 
   const net = (evidence.network || network || "").toLowerCase();
-  const isTestnet = net.includes("test") || net.includes("september 2015") || net.includes("testnet");
+  const isTestnet =
+    net.includes("test") || net.includes("september 2015") || net.includes("testnet");
   const explorerBase = isTestnet
     ? "https://stellar.expert/explorer/testnet"
     : "https://stellar.expert/explorer/public";
@@ -52,14 +54,16 @@ export function getPaymentEvidenceInfo(
       : undefined;
 
     const sponsorText = evidence.payer ? ` (Payer: ${evidence.payer})` : "";
-    const amountText = evidence.amount && evidence.asset ? ` of ${evidence.amount} ${evidence.asset}` : "";
+    const amountText =
+      evidence.amount && evidence.asset ? ` of ${evidence.amount} ${evidence.asset}` : "";
 
     return {
       status: "verified",
       title: evidence.kind === "settled" ? "Payment Settled" : "Payment Verified",
-      description: evidence.kind === "settled"
-        ? `Successfully settled payment${amountText} on Stellar ${evidence.network}${sponsorText}.`
-        : `Authorized payment challenge${amountText} on Stellar ${evidence.network}${sponsorText} (settlement pending).`,
+      description:
+        evidence.kind === "settled"
+          ? `Successfully settled payment${amountText} on Stellar ${evidence.network}${sponsorText}.`
+          : `Authorized payment challenge${amountText} on Stellar ${evidence.network}${sponsorText} (settlement pending).`,
       explorerUrl,
       className: "payment-banner--verified"
     };
@@ -104,12 +108,7 @@ export default function PaymentEvidenceBanner({ payment }: PaymentEvidenceBanner
         </div>
       </div>
       {info.explorerUrl && (
-        <a
-          href={info.explorerUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="payment-banner-link"
-        >
+        <a href={info.explorerUrl} target="_blank" rel="noreferrer" className="payment-banner-link">
           <span>Explorer</span>
           <ExternalLink size={13} />
         </a>

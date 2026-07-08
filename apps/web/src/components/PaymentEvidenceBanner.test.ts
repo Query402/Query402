@@ -92,9 +92,7 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
     expect(info.title).toMatch(/Payment Settled/i);
     expect(info.className).toMatch(/--verified/);
     expect(info.description).toMatch(/0.02 USDC/);
-    expect(info.explorerUrl).toBe(
-      "https://stellar.expert/explorer/testnet/tx/abcd1234hash"
-    );
+    expect(info.explorerUrl).toBe("https://stellar.expert/explorer/testnet/tx/abcd1234hash");
   });
 
   it("handles settled payment evidence with explorer link on mainnet", () => {
@@ -113,8 +111,6 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
     const info = getPaymentEvidenceInfo(evidence);
 
     expect(info.status).toBe("verified");
-    expect(info.explorerUrl).toBe(
-      "https://stellar.expert/explorer/public/tx/abcd5678hash"
-    );
+    expect(info.explorerUrl).toBe("https://stellar.expert/explorer/public/tx/abcd5678hash");
   });
 });
