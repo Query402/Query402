@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateUrl, resolveAndValidate, getRequestPolicy, safeErrorMessage } from './urlSafety';
+import { validateUrl, resolveAndValidate, getRequestPolicy, safeErrorMessage } from './urlSafety.js';
 
 describe('validateUrl', () => {
   it('allows public HTTPS URLs', () => {

@@ -318,6 +318,7 @@ describe("x402 cross-layer price consistency", () => {
       expect(deviatingProviders).toContain("search.basic");
     }
   );
+});
 
 describe("capability matrix", () => {
   it("returns all providers with correct shape", () => {
