@@ -32,6 +32,18 @@ export const scrapeQuerySchema = baseQuerySchema.extend({
   url: z.string().url()
 });
 
+export const providerCapabilitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  category: providerCategorySchema,
+  priceUsd: z.number().positive(),
+  sourceType: z.enum(["live", "deterministic-fallback", "unavailable"]),
+  latencyEstimateMs: z.number().int().positive(),
+  enabled: z.boolean(),
+  hasFallback: z.boolean(),
+  caveat: z.string().nullable()
+});
+
 const stellarPublicKeySchema = z.string().regex(/^G[A-Z2-7]{55}$/, "Invalid Stellar public key");
 
 export { stellarPublicKeySchema };

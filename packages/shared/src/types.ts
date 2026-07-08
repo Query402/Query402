@@ -124,8 +124,25 @@ export interface AnalyticsSummary {
     fallbackByCategory: Record<QueryMode, number>;
     fallbackReasonCounts: Record<ExecutionFallbackReason, number>;
   };
+  totalDemoQueries: number;
+  totalSettledPayments: number;
+  spendByPaymentSource: Record<string, number>;
+  recentDemoActivity: PaymentAttempt[];
+  recentSettledPayments: PaymentAttempt[];
   recentTransactions: PaymentAttempt[];
   recentUsage: UsageEvent[];
+}
+
+export interface ProviderCapability {
+  id: string;
+  name: string;
+  category: ProviderCategory;
+  priceUsd: number;
+  sourceType: SourceType;
+  latencyEstimateMs: number;
+  enabled: boolean;
+  hasFallback: boolean;
+  caveat: string | null;
 }
 
 export interface SponsorshipGrant {

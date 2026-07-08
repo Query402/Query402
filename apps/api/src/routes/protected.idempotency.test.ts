@@ -3,9 +3,9 @@ import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  applySponsorshipTestEnv,
-  resetSponsorshipStore
-} from "../test/sponsorship-test-helpers.js";
+  applyApiTestEnv,
+  resetApiTestStorage
+} from "../test/api-test-helpers.js";
 
 const executeQueryMock = vi.fn();
 
@@ -66,17 +66,19 @@ function demoPaidRequest(app: express.Express) {
 }
 
 describe("x402 idempotency", () => {
-  let dbPath: string | undefined;
+  let analyticsDbPath: string | undefined;
+  let sponsorshipDbPath: string | undefined;
 
   beforeEach(() => {
-    dbPath = applySponsorshipTestEnv();
+    ({ analyticsDbPath, sponsorshipDbPath } = applyApiTestEnv());
     executeQueryMock.mockReset();
     mockQueryResult();
   });
 
   afterEach(async () => {
-    await resetSponsorshipStore(dbPath);
-    dbPath = undefined;
+    await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
+    analyticsDbPath = undefined;
+    sponsorshipDbPath = undefined;
   });
 
   it("returns cached response for idempotent retries", async () => {

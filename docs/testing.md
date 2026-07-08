@@ -54,3 +54,16 @@ Run the root test command twice and confirm identical passing results:
 npm test
 npm test
 ```
+
+## Troubleshooting
+
+### Rollup Optional Native Dependency Failures
+
+During local setup or CI-like runtime execution, you may see an installation or build symptom indicating that native binary bindings like `@rollup/rollup-*-gnu` are missing.
+
+To recover safely from this state without committing generated artifacts or causing lockfile churn:
+
+1. Clean the invalid local node modules state:
+   ```bash
+   rm -rf node_modules
+   ```

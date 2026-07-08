@@ -1,4 +1,41 @@
-import type { ProviderDefinition } from "@query402/shared";
+import type { ProviderCapability, ProviderDefinition } from "@query402/shared";
+
+const envKeyMapping: Record<string, string[]> = {
+  "search.live": ["GROQ_API_KEY"],
+  "search.basic": ["GROQ_API_KEY"],
+  "search.pro": ["GROQ_API_KEY"],
+  "news.fast": ["GROQ_API_KEY"],
+  "news.deep": ["GROQ_API_KEY"],
+  "scrape.page": ["GROQ_API_KEY"],
+  "scrape.extract": ["GROQ_API_KEY"]
+};
+
+function computeCaveat(providerId: string): string | null {
+  const required = envKeyMapping[providerId];
+  if (!required) return null;
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length === 0) return null;
+  return `${missing.join(", ")} not configured — falling back to deterministic results`;
+}
+
+export function buildCapabilityMatrix(): ProviderCapability[] {
+  return providers
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      priceUsd: p.priceUsd,
+      sourceType: p.sourceType,
+      latencyEstimateMs: p.latencyEstimateMs,
+      enabled: p.enabled,
+      hasFallback: true,
+      caveat: computeCaveat(p.id)
+    }))
+    .sort((a, b) => {
+      const cat = a.category.localeCompare(b.category);
+      return cat !== 0 ? cat : a.id.localeCompare(b.id);
+    });
+}
 
 export const providers: ProviderDefinition[] = [
   {
