@@ -28,7 +28,7 @@ export interface UrlPolicyResult {
 
 export function validateUrl(raw: string): UrlPolicyResult {
   try {
-    let url = new URL(raw);
+    const url = new URL(raw);
 
     if (!['http:', 'https:'].includes(url.protocol)) {
       return { safe: false, sanitizedUrl: '', error: 'Only HTTP/HTTPS protocols are allowed' };
