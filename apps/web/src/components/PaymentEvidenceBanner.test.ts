@@ -1,19 +1,18 @@
-import { test, describe } from "node:test";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import { getPaymentEvidenceInfo } from "./PaymentEvidenceBanner.js";
 import type { PaidQueryResponse } from "../types.js";
 
 describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
-  test("handles missing (undefined) payment evidence", () => {
+  it("handles missing (undefined) payment evidence", () => {
     const info = getPaymentEvidenceInfo(undefined, "stellar:testnet");
 
-    assert.strictEqual(info.status, "missing");
-    assert.match(info.title, /Missing Payment Evidence/i);
-    assert.match(info.className, /--missing/);
-    assert.strictEqual(info.explorerUrl, undefined);
+    expect(info.status).toBe("missing");
+    expect(info.title).toMatch(/Missing Payment Evidence/i);
+    expect(info.className).toMatch(/--missing/);
+    expect(info.explorerUrl).toBeUndefined();
   });
 
-  test("handles demo-mode payment evidence", () => {
+  it("handles demo-mode payment evidence", () => {
     const evidence: PaidQueryResponse["payment"]["evidence"] = {
       kind: "demo",
       status: "demo-paid",
@@ -25,14 +24,14 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     const info = getPaymentEvidenceInfo(evidence, "stellar:testnet");
 
-    assert.strictEqual(info.status, "demo");
-    assert.match(info.title, /Demo Mode Payment/i);
-    assert.match(info.className, /--demo/);
-    assert.match(info.description, /demo-agent/);
-    assert.strictEqual(info.explorerUrl, undefined);
+    expect(info.status).toBe("demo");
+    expect(info.title).toMatch(/Demo Mode Payment/i);
+    expect(info.className).toMatch(/--demo/);
+    expect(info.description).toMatch(/demo-agent/);
+    expect(info.explorerUrl).toBeUndefined();
   });
 
-  test("handles failed payment evidence", () => {
+  it("handles failed payment evidence", () => {
     const evidence: PaidQueryResponse["payment"]["evidence"] = {
       kind: "failed",
       status: "failed",
@@ -45,14 +44,14 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     const info = getPaymentEvidenceInfo(evidence, "stellar:testnet");
 
-    assert.strictEqual(info.status, "failed");
-    assert.match(info.title, /Payment Verification Failed/i);
-    assert.match(info.className, /--failed/);
-    assert.match(info.description, /insufficient funds/);
-    assert.strictEqual(info.explorerUrl, undefined);
+    expect(info.status).toBe("failed");
+    expect(info.title).toMatch(/Payment Verification Failed/i);
+    expect(info.className).toMatch(/--failed/);
+    expect(info.description).toMatch(/insufficient funds/);
+    expect(info.explorerUrl).toBeUndefined();
   });
 
-  test("handles verified (challenge authorized, settlement pending) evidence on testnet", () => {
+  it("handles verified (challenge authorized, settlement pending) evidence on testnet", () => {
     const evidence: PaidQueryResponse["payment"]["evidence"] = {
       kind: "verified",
       status: "verified",
@@ -66,15 +65,15 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     const info = getPaymentEvidenceInfo(evidence);
 
-    assert.strictEqual(info.status, "verified");
-    assert.match(info.title, /Payment Verified/i);
-    assert.match(info.className, /--verified/);
-    assert.match(info.description, /G_SPONSOR/);
-    assert.match(info.description, /USDC/);
-    assert.strictEqual(info.explorerUrl, undefined); // No Tx hash yet
+    expect(info.status).toBe("verified");
+    expect(info.title).toMatch(/Payment Verified/i);
+    expect(info.className).toMatch(/--verified/);
+    expect(info.description).toMatch(/G_SPONSOR/);
+    expect(info.description).toMatch(/USDC/);
+    expect(info.explorerUrl).toBeUndefined(); // No Tx hash yet
   });
 
-  test("handles settled payment evidence with explorer link on testnet", () => {
+  it("handles settled payment evidence with explorer link on testnet", () => {
     const evidence: PaidQueryResponse["payment"]["evidence"] = {
       kind: "settled",
       status: "settled",
@@ -89,14 +88,14 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     const info = getPaymentEvidenceInfo(evidence);
 
-    assert.strictEqual(info.status, "verified");
-    assert.match(info.title, /Payment Settled/i);
-    assert.match(info.className, /--verified/);
-    assert.match(info.description, /0.02 USDC/);
-    assert.strictEqual(info.explorerUrl, "https://stellar.expert/explorer/testnet/tx/abcd1234hash");
+    expect(info.status).toBe("verified");
+    expect(info.title).toMatch(/Payment Settled/i);
+    expect(info.className).toMatch(/--verified/);
+    expect(info.description).toMatch(/0.02 USDC/);
+    expect(info.explorerUrl).toBe("https://stellar.expert/explorer/testnet/tx/abcd1234hash");
   });
 
-  test("handles settled payment evidence with explorer link on mainnet", () => {
+  it("handles settled payment evidence with explorer link on mainnet", () => {
     const evidence: PaidQueryResponse["payment"]["evidence"] = {
       kind: "settled",
       status: "settled",
@@ -111,7 +110,7 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     const info = getPaymentEvidenceInfo(evidence);
 
-    assert.strictEqual(info.status, "verified");
-    assert.strictEqual(info.explorerUrl, "https://stellar.expert/explorer/public/tx/abcd5678hash");
+    expect(info.status).toBe("verified");
+    expect(info.explorerUrl).toBe("https://stellar.expert/explorer/public/tx/abcd5678hash");
   });
 });

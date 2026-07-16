@@ -55,6 +55,7 @@ type EvidenceBase = {
   amount?: string;
   payTo: string;
   facilitatorUrl: string;
+  capturedAt?: string;
 };
 
 export type PaidRequestRecord = {
@@ -192,7 +193,8 @@ export function buildEvidenceFromRequirements(input: {
     asset: input.requirements.asset,
     amount: input.requirements.amount,
     payTo: input.requirements.payTo,
-    facilitatorUrl: config.X402_FACILITATOR_URL
+    facilitatorUrl: config.X402_FACILITATOR_URL,
+    capturedAt: new Date().toISOString()
   };
 
   if (input.failure) {
@@ -297,7 +299,8 @@ export function buildDemoPaymentEvidence(req: Request): DemoPaymentEvidence {
     network: config.STELLAR_NETWORK,
     payTo: config.X402_PAY_TO_ADDRESS,
     facilitatorUrl: config.X402_FACILITATOR_URL,
-    payer: req.header("x-demo-payer") ?? "demo-agent"
+    payer: req.header("x-demo-payer") ?? "demo-agent",
+    capturedAt: new Date().toISOString()
   };
 }
 
