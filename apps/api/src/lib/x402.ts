@@ -12,6 +12,7 @@ import type { PaymentPayload } from "@x402/core/types";
 import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
 import { buildPaymentDebugMetadata } from "./payment-debug.js";
+import { redactSensitiveObject } from "./redact-headers.js";
 import {
   savePaymentAttempt,
   updatePaymentAttemptEvidence,
@@ -153,21 +154,23 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
   });
 
   res.set("Cache-Control", "no-store");
-  return res.status(402).json({
-    error: "Payment Required",
-    errorCode: "payment_required",
-    demoMode: true,
-    debug,
-    accepts: {
-      scheme: "exact",
-      network: config.STELLAR_NETWORK,
-      price,
-      payTo: config.X402_PAY_TO_ADDRESS,
-      facilitator: config.X402_FACILITATOR_URL
-    },
-    instructions:
-      "For deterministic demo mode, retry with header x-query402-demo-paid: true. Demo evidence is recorded separately from settled x402 payments."
-  });
+  return res.status(402).json(
+    redactSensitiveObject({
+      error: "Payment Required",
+      errorCode: "payment_required",
+      demoMode: true,
+      debug,
+      accepts: {
+        scheme: "exact",
+        network: config.STELLAR_NETWORK,
+        price,
+        payTo: config.X402_PAY_TO_ADDRESS,
+        facilitator: config.X402_FACILITATOR_URL
+      },
+      instructions:
+        "For deterministic demo mode, retry with header x-query402-demo-paid: true. Demo evidence is recorded separately from settled x402 payments."
+    })
+  );
 }
 
 export const getX402LifecycleHandlers = (network: string) => ({
@@ -315,12 +318,12 @@ export function createX402Middleware() {
 
     return {
       contentType: "application/json",
-      body: {
+      body: redactSensitiveObject({
         error: "Payment settlement failed",
         type: "payment_settlement_failed",
         errorCode: "payment_invalid",
         debug
-      }
+      })
     };
   };
 
@@ -456,9 +459,9 @@ export function createX402Middleware() {
           expectedPrice,
           paymentHeader
         });
-        return originalJson({ ...(body as Record<string, unknown>), debug });
+        return originalJson(redactSensitiveObject({ ...(body as Record<string, unknown>), debug }));
       }
-      return originalJson(body);
+      return originalJson(redactSensitiveObject(body));
     };
     return paymentMiddleware(req, res, next);
   };
