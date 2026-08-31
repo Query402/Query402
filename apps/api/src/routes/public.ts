@@ -11,6 +11,18 @@ import { checkFacilitatorSupported } from "../lib/facilitator-check.js";
 
 export const publicRouter = Router();
 
+function checkOverLimit(val: unknown): boolean {
+  if (val === undefined || val === null || val === "") return false;
+  const num = Number(val);
+  return !Number.isNaN(num) && num > MAX_EXPORT_SIZE;
+}
+
+const overLimitErrorPayload = {
+  error: "over_limit_export_size",
+  message: `Export row limit exceeds maximum allowed size of ${MAX_EXPORT_SIZE}`,
+  max: MAX_EXPORT_SIZE
+};
+
 const usageQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
   offset: z.coerce.number().int().min(0).optional()
@@ -18,7 +30,7 @@ const usageQuerySchema = z.object({
 
 const analyticsQuerySchema = z.object({
   recentUsageLimit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
-  recentPaymentLimit: z.coerce.number().int().min(1).max(500).optional()
+  recentPaymentLimit: z.coerce.number().int().min(1).max(MAX_PAYMENT_ATTEMPTS).optional()
 });
 
 publicRouter.get("/health", (_req, res) => {
@@ -56,6 +68,10 @@ publicRouter.get("/api/matrix", (_req, res) => {
 
 publicRouter.get("/api/usage", async (req, res, next) => {
   try {
+    if (checkOverLimit(req.query.limit)) {
+      return res.status(400).json(overLimitErrorPayload);
+    }
+
     const parsed = usageQuerySchema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
