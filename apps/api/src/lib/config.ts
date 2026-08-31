@@ -85,3 +85,11 @@ export function getFacilitatorConfigured(): boolean {
     parsed.data.X402_FACILITATOR_API_KEY.length > 0
   );
 }
+
+export function requirePayToAddress(): string {
+  const addr = parsed.data.X402_PAY_TO_ADDRESS;
+  if (!addr || addr.length === 0) {
+    throw new Error("X402_PAY_TO_ADDRESS is not configured");
+  }
+  return addr;
+}
