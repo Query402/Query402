@@ -1,13 +1,30 @@
 import fs from "node:fs";
 import path from "node:path";
+import { nanoid } from "nanoid";
 import type {
   AnalyticsSummary,
   PaymentAttempt,
   UsageEvent,
   PrivacySafeAnalyticsResponse,
-  DetailedAnalyticsResponse
+  DetailedAnalyticsResponse,
+  QueryMode,
+  PaymentSource,
+  ProviderExecutionMetadata
 } from "@query402/shared";
-import { getPublicAnalytics, getDetailedAnalytics, getAnalyticsConfig } from "./analytics-service.js";
+import type {
+  PaginationOptions,
+  AnalyticsQueryOptions,
+  PaymentUsagePair,
+  SettlementDigest
+} from "./storage/types.js";
+import { getStorageRepository } from "./storage/index.js";
+import {
+  getPublicAnalytics,
+  getDetailedAnalytics,
+  getAnalyticsConfig
+} from "./analytics-service.js";
+import { getProviderById } from "./pricing.js";
+import { config, requirePayToAddress } from "./config.js";
 
 export interface PersistPaidRequestInput {
   mode: QueryMode;
@@ -73,7 +90,8 @@ function computePriceOutlier(
 
 function buildUsageEvent(
   input: PersistPaidRequestInput,
-  overrides: Partial<UsageEvent> = {}
+  overrides: Partial<UsageEvent> = {},
+  paymentIdOverride?: string
 ): UsageEvent {
   const now = new Date().toISOString();
 
@@ -90,7 +108,7 @@ function buildUsageEvent(
     facilitatorUrl: config.X402_FACILITATOR_URL,
     payerPublicKey: input.payerPublicKey,
     traceId: input.traceId,
-    paymentId,
+    paymentId: paymentIdOverride,
     createdAt: now,
     latencyMs: input.latencyMs,
     execution: input.execution,
@@ -131,9 +149,13 @@ export async function getSettlementDigest(): Promise<SettlementDigest> {
 
 export async function persistPaidRequest(input: PersistPaidRequestInput): Promise<void> {
   const payment = buildPaymentAttempt(input);
-  const usage = buildUsageEvent(input, {
-    payerPublicKey: input.payerPublicKey
-  });
+  const usage = buildUsageEvent(
+    input,
+    {
+      payerPublicKey: input.payerPublicKey
+    },
+    payment.id
+  );
 
   await persistPaymentAndUsage({ payment, usage });
 }
@@ -154,10 +176,38 @@ export async function persistSponsoredPayment(input: PersistSponsoredPaymentInpu
   );
   const usage = buildUsageEvent(
     { ...input, payerPublicKey: input.walletPublicKey },
-    sponsorshipFields
+    sponsorshipFields,
+    payment.id
   );
 
   await persistPaymentAndUsage({ payment, usage });
+}
+
+export async function updatePaymentAttemptEvidence(
+  paymentId: string,
+  evidenceUpdates: Partial<PaymentAttempt["evidence"]>
+): Promise<void> {
+  const repo = getStorageRepository();
+  if ("updatePaymentAttempt" in repo && typeof repo.updatePaymentAttempt === "function") {
+    await repo.updatePaymentAttempt(paymentId, evidenceUpdates);
+  }
+}
+
+export async function updateUsageEventsByPaymentId(
+  paymentId: string,
+  evidenceUpdates: Partial<UsageEvent["paymentEvidence"]>
+): Promise<void> {
+  const repo = getStorageRepository();
+  if ("updateUsageByPaymentId" in repo && typeof repo.updateUsageByPaymentId === "function") {
+    await repo.updateUsageByPaymentId(paymentId, evidenceUpdates);
+  }
+}
+
+function readDb(): { usage: UsageEvent[]; payments: PaymentAttempt[] } {
+  return {
+    usage: [],
+    payments: []
+  };
 }
 
 /**

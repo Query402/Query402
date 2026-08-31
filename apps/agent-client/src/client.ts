@@ -134,9 +134,10 @@ export async function runPaidQuery(input: {
     endpoint,
     status: response.status,
     ok: response.ok,
+    isDemoMode,
     paymentResponse: response.headers.get("payment-response"),
-    id: newNode.id,
+    id: idempotencyKey,
     body: json,
     proofLinks
   };
-
+}

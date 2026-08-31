@@ -84,6 +84,16 @@ async function main() {
   const term = args[1];
   const receiptMode = hasFlag("--receipt", args) || hasFlag("--json", args);
 
+  if (hasFlag("--help", args) || hasFlag("-h", args)) {
+    usage();
+    process.exit(0);
+  }
+
+  if (hasFlag("--version", args) || hasFlag("-V", args)) {
+    console.log("query402-agent-client/0.1.0");
+    process.exit(0);
+  }
+
   if (!modeArg || !["search", "news", "scrape"].includes(modeArg)) {
     usage();
     process.exit(1);

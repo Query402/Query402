@@ -9,7 +9,11 @@ export function resolveStellarExplorerUrl(network?: string): string {
   if (normalized.includes("test") || normalized.includes("testnet")) {
     return STELLAR_TESTNET_EXPLORER;
   }
-  if (normalized.includes("pub") || normalized.includes("main") || normalized === "stellar:pubnet") {
+  if (
+    normalized.includes("pub") ||
+    normalized.includes("main") ||
+    normalized === "stellar:pubnet"
+  ) {
     return STELLAR_PUBNET_EXPLORER;
   }
   return STELLAR_TESTNET_EXPLORER;
@@ -50,8 +54,6 @@ export function buildPaymentProofLinks(input: {
     payTo: input.payToAddress
       ? buildAccountLink(input.payToAddress, input.network)
       : "not_available",
-    payer: input.payerPublicKey ? buildAccountLink(input.payerPublicKey) : "not_available",
-    payTo: input.payToAddress ? buildAccountLink(input.payToAddress) : "not_available",
     network: input.network ?? "unknown",
     asset: input.asset ?? "not_available"
   };

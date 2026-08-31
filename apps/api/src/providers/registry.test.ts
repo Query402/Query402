@@ -137,8 +137,19 @@ describe("ProviderRegistry", () => {
     expect(result.execution).toMatchObject({
       source: "deterministic-fallback",
       usedFallback: true,
-      fallbackReason: "timeout"
+      fallbackReason: "timeout",
+      timedOut: true
     });
+  });
+
+  it("marks successful executions as not timed out", async () => {
+    const registry = new DefaultProviderRegistry();
+    const adapter = new MockAdapter("test.search.live");
+    registry.register(adapter);
+
+    const result = await registry.execute("search", "test.search.live", "test-query");
+    expect(result.execution.timedOut).toBe(false);
+    expect(result.items).toHaveLength(1);
   });
 
   it("trips circuit breaker and recovers", async () => {
