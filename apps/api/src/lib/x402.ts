@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import {
   paymentMiddlewareFromHTTPServer,
@@ -11,6 +12,11 @@ import type { PaymentPayload } from "@x402/core/types";
 import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
 import { buildPaymentDebugMetadata } from "./payment-debug.js";
+import {
+  savePaymentAttempt,
+  updatePaymentAttemptEvidence,
+  updateUsageEventsByPaymentId
+} from "./persistence.js";
 import {
   buildDemoPaymentEvidence,
   buildEvidenceFromHttpContext,
@@ -33,6 +39,43 @@ const basePriceByMode: Record<RouteMode, string> = {
   news: protectedRouteBasePrices["GET /x402/news"] ?? "$0.015",
   scrape: protectedRouteBasePrices["GET /x402/scrape"] ?? "$0.02"
 };
+
+const PAYMENT_HEADER_CANDIDATES = ["payment", "payment-signature", "x-payment"] as const;
+
+function isProtectedX402Route(path: string): boolean {
+  return path === "/x402/search" || path === "/x402/news" || path === "/x402/scrape";
+}
+
+function extractAnyPaymentHeader(req: Request): string | undefined {
+  for (const name of PAYMENT_HEADER_CANDIDATES) {
+    const value = req.header(name);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getProviderIdFromRequest(req: Request): string {
+  const providerId = Array.isArray(req.query.provider)
+    ? req.query.provider[0]
+    : (req.query.provider ?? "unknown");
+  return typeof providerId === "string" ? providerId : "unknown";
+}
+
+function getExpectedPriceForRequest(req: Request): string {
+  const mode = routeModeFromPath(req.path);
+  if (!mode) {
+    return "$0.01";
+  }
+  const basePrice = basePriceByMode[mode as RouteMode];
+  const pId = getProviderIdFromRequest(req);
+  const p = getProviderById(pId);
+  if (p && p.category === mode) {
+    return formatUsdPrice(p.priceUsd);
+  }
+  return basePrice;
+}
 
 function getProviderFromContext(context: HTTPRequestContext) {
   const rawProvider =
@@ -129,15 +172,15 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
 
 export const getX402LifecycleHandlers = (network: string) => ({
   onAfterVerify: async (ctx: any) => {
-    const transport = ctx.transportContext as { request?: Request, req?: Request } | Request;
-    const req = ('headers' in transport) ? transport : (transport.request || transport.req);
-    
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
+
     if (req) {
       const paymentId = `pay_${nanoid(10)}`;
       req.headers["x-payment-attempt-id"] = paymentId;
-      
+
       const providerId = getProviderFromContext(ctx.transportContext) ?? "unknown";
-      
+
       savePaymentAttempt({
         id: paymentId,
         endpoint: req.path,
@@ -148,7 +191,10 @@ export const getX402LifecycleHandlers = (network: string) => ({
           amountUsd: Number(ctx.requirements.amount),
           payToAddress: ctx.requirements.payTo,
           facilitatorUrl: config.X402_FACILITATOR_URL,
-          paymentPayload: typeof ctx.paymentPayload === "string" ? ctx.paymentPayload : JSON.stringify(ctx.paymentPayload)
+          paymentPayload:
+            typeof ctx.paymentPayload === "string"
+              ? ctx.paymentPayload
+              : JSON.stringify(ctx.paymentPayload)
         },
         createdAt: new Date().toISOString()
       });
@@ -156,10 +202,10 @@ export const getX402LifecycleHandlers = (network: string) => ({
   },
 
   onAfterSettle: async (ctx: any) => {
-    const transport = ctx.transportContext as { request?: Request, req?: Request } | Request;
-    const req = ('headers' in transport) ? transport : (transport.request || transport.req);
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
     const paymentId = req?.headers?.["x-payment-attempt-id"] as string | undefined;
-    
+
     if (paymentId) {
       const evidence = {
         status: "settled" as const,
@@ -168,7 +214,10 @@ export const getX402LifecycleHandlers = (network: string) => ({
         payToAddress: ctx.requirements.payTo,
         facilitatorUrl: config.X402_FACILITATOR_URL,
         transactionHash: ctx.result.transaction,
-        paymentPayload: typeof ctx.paymentPayload === "string" ? ctx.paymentPayload : JSON.stringify(ctx.paymentPayload)
+        paymentPayload:
+          typeof ctx.paymentPayload === "string"
+            ? ctx.paymentPayload
+            : JSON.stringify(ctx.paymentPayload)
       };
       updatePaymentAttemptEvidence(paymentId, evidence);
       updateUsageEventsByPaymentId(paymentId, evidence);
@@ -176,8 +225,8 @@ export const getX402LifecycleHandlers = (network: string) => ({
   },
 
   onSettleFailure: async (ctx: any) => {
-    const transport = ctx.transportContext as { request?: Request, req?: Request } | Request;
-    const req = ('headers' in transport) ? transport : (transport.request || transport.req);
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
     const paymentId = req?.headers?.["x-payment-attempt-id"] as string | undefined;
 
     if (paymentId) {
@@ -188,9 +237,13 @@ export const getX402LifecycleHandlers = (network: string) => ({
         payToAddress: ctx.requirements.payTo,
         facilitatorUrl: config.X402_FACILITATOR_URL,
         error: ctx.error?.message ?? "Payment settlement failed",
-        paymentPayload: ctx.paymentPayload ? (typeof ctx.paymentPayload === "string" ? ctx.paymentPayload : JSON.stringify(ctx.paymentPayload)) : undefined
+        paymentPayload: ctx.paymentPayload
+          ? typeof ctx.paymentPayload === "string"
+            ? ctx.paymentPayload
+            : JSON.stringify(ctx.paymentPayload)
+          : undefined
       };
-      
+
       updatePaymentAttemptEvidence(paymentId, evidence);
       updateUsageEventsByPaymentId(paymentId, evidence);
     }
@@ -334,6 +387,40 @@ export function createX402Middleware() {
   const paymentMiddleware = paymentMiddlewareFromHTTPServer(httpServer);
 
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (isProtectedX402Route(req.path)) {
+      const rawHeader = extractAnyPaymentHeader(req);
+      if (rawHeader === undefined) {
+        const debug = buildPaymentDebugMetadata({
+          failureType: "no_payment_header",
+          route: req.path,
+          providerId: getProviderIdFromRequest(req),
+          expectedPrice: getExpectedPriceForRequest(req)
+        });
+        return res.status(400).json({
+          error: "Payment header is required",
+          type: "no_payment_header",
+          errorCode: "no_payment_header",
+          debug
+        });
+      }
+
+      if (rawHeader.trim() === "") {
+        const debug = buildPaymentDebugMetadata({
+          failureType: "invalid_payment_header",
+          route: req.path,
+          providerId: getProviderIdFromRequest(req),
+          expectedPrice: getExpectedPriceForRequest(req),
+          paymentHeader: rawHeader
+        });
+        return res.status(400).json({
+          error: "Payment header is blank",
+          type: "invalid_payment_header",
+          errorCode: "invalid_payment_header",
+          debug
+        });
+      }
+    }
+
     // Prevent browsers and proxies from caching sensitive payment evidence.
     if (req.path.startsWith("/x402/")) {
       res.set("Cache-Control", "no-store");

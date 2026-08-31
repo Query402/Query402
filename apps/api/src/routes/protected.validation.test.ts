@@ -432,3 +432,160 @@ describe("x402 payment debug metadata - middleware wrapper behavior", () => {
     expect(response.body.debug.paymentHeaderFingerprint).not.toContain("sensitive-crypto-material");
   });
 });
+
+describe("x402 payment header presence validation - non-demo routes", () => {
+  let analyticsDbPath: string;
+  let sponsorshipDbPath: string;
+
+  beforeEach(() => {
+    ({ analyticsDbPath, sponsorshipDbPath } = applyApiTestEnv({
+      DEMO_MODE: "false"
+    }));
+    executeQueryMock.mockReset();
+  });
+
+  afterEach(async () => {
+    await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
+    vi.restoreAllMocks();
+  });
+
+  async function createHeaderValidationApp() {
+    const { createX402Middleware } = await import("../lib/x402.js");
+    const { protectedRouter } = await import("../routes/protected.js");
+    const app = express();
+    app.use(createX402Middleware());
+    app.use(protectedRouter);
+    return app;
+  }
+
+  const protectedRoutes = [
+    { path: "/x402/search", query: { provider: "search.basic", q: "stellar x402" } },
+    { path: "/x402/news", query: { provider: "news.fast", q: "stellar news" } },
+    { path: "/x402/scrape", query: { provider: "scrape.page", url: "https://example.com" } }
+  ];
+
+  const headerCandidates = ["payment", "payment-signature", "x-payment"] as const;
+
+  for (const routeCase of protectedRoutes) {
+    describe(`GET ${routeCase.path}`, () => {
+      it("returns no_payment_header when all payment headers are absent", async () => {
+        const app = await createHeaderValidationApp();
+        const response = await request(app).get(routeCase.path).query(routeCase.query);
+
+        expect(response.status).toBe(400);
+        expect(response.body.errorCode).toBe("no_payment_header");
+        expect(response.body.type).toBe("no_payment_header");
+        expect(response.body.error).toContain("required");
+        expect(response.body.debug).toBeDefined();
+        expect(response.body.debug.failureType).toBe("no_payment_header");
+        expect(response.body.debug.route).toBe(routeCase.path);
+        expect(response.body.debug.nextStep).toBe("Retry payment");
+      });
+
+      it("returns invalid_payment_header when payment header is empty string via payment header", async () => {
+        const app = await createHeaderValidationApp();
+        const response = await request(app)
+          .get(routeCase.path)
+          .query(routeCase.query)
+          .set("payment", "");
+
+        expect(response.status).toBe(400);
+        expect(response.body.errorCode).toBe("invalid_payment_header");
+        expect(response.body.type).toBe("invalid_payment_header");
+        expect(response.body.error).toContain("blank");
+        expect(response.body.debug).toBeDefined();
+        expect(response.body.debug.failureType).toBe("invalid_payment_header");
+        expect(response.body.debug.route).toBe(routeCase.path);
+        expect(response.body.debug.nextStep).toBe("Verify payment header");
+      });
+
+      it("returns invalid_payment_header when payment header is whitespace only", async () => {
+        const app = await createHeaderValidationApp();
+        const response = await request(app)
+          .get(routeCase.path)
+          .query(routeCase.query)
+          .set("payment-signature", "   \t  ");
+
+        expect(response.status).toBe(400);
+        expect(response.body.errorCode).toBe("invalid_payment_header");
+        expect(response.body.type).toBe("invalid_payment_header");
+        expect(response.body.error).toContain("blank");
+        expect(response.body.debug.failureType).toBe("invalid_payment_header");
+      });
+
+      for (const headerName of headerCandidates) {
+        it(`detects blank ${headerName} header and returns invalid_payment_header`, async () => {
+          const app = await createHeaderValidationApp();
+          const response = await request(app)
+            .get(routeCase.path)
+            .query(routeCase.query)
+            .set(headerName, "");
+
+          expect(response.status).toBe(400);
+          expect(response.body.errorCode).toBe("invalid_payment_header");
+          expect(response.body.type).toBe("invalid_payment_header");
+          expect(response.body.error).toContain("blank");
+        });
+      }
+    });
+  }
+
+  it("missing and blank errors have distinct errorCode, type, and message", async () => {
+    const app = await createHeaderValidationApp();
+
+    const missing = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: "test query" });
+
+    const blank = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: "test query" })
+      .set("x-payment", "");
+
+    expect(missing.body.errorCode).not.toBe(blank.body.errorCode);
+    expect(missing.body.type).not.toBe(blank.body.type);
+    expect(missing.body.error).not.toBe(blank.body.error);
+    expect(missing.body.debug.failureType).not.toBe(blank.body.debug.failureType);
+    expect(missing.body.debug.nextStep).not.toBe(blank.body.debug.nextStep);
+  });
+
+  it("does not enforce payment headers on non-protected routes", async () => {
+    const { publicRouter } = await import("../routes/public.js");
+    const app = express();
+    app.use(await (async () => {
+      const { createX402Middleware } = await import("../lib/x402.js");
+      return createX402Middleware();
+    })());
+    app.use(publicRouter);
+
+    const response = await request(app).get("/health");
+
+    expect(response.status).not.toBe(400);
+    expect(response.body?.errorCode).not.toBe("no_payment_header");
+    expect(response.body?.errorCode).not.toBe("invalid_payment_header");
+  });
+
+  it("includes expected price in debug metadata for missing header", async () => {
+    const app = await createHeaderValidationApp();
+    const response = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: "price check" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errorCode).toBe("no_payment_header");
+    expect(response.body.debug.expectedPrice).toBe("$0.01");
+    expect(response.body.debug.providerId).toBe("search.basic");
+  });
+
+  it("includes provider-specific expected price in debug metadata for missing header", async () => {
+    const app = await createHeaderValidationApp();
+    const response = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.pro", q: "price check pro" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errorCode).toBe("no_payment_header");
+    expect(response.body.debug.expectedPrice).toBe("$0.02");
+    expect(response.body.debug.providerId).toBe("search.pro");
+  });
+});
