@@ -9,6 +9,26 @@ const execAsync = promisify(exec);
 const tsx = process.platform === "win32" ? "npx.cmd --yes tsx" : "npx --yes tsx";
 const cliPath = resolve(__dirname, "cli.ts");
 
+/**
+ * Run the CLI and return { code, stdout, stderr }.
+ * Never throws — caller asserts on the returned fields.
+ */
+async function runCli(
+  ...args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const quotedArgs = args.map((a) => `"${a.replace(/"/g, '\\"')}"`).join(" ");
+  try {
+    const result = await execAsync(`${tsx} "${cliPath}" ${quotedArgs}`);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (err: any) {
+    return {
+      code: typeof err.code === "number" ? err.code : 1,
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? ""
+    };
+  }
+}
+
 describe("CLI Validation", () => {
   it("exits with clear message when query is missing for search mode", async () => {
     try {
@@ -60,6 +80,161 @@ describe("CLI Validation", () => {
     } catch (error: any) {
       expect(error.code).toBe(1);
       expect(error.stderr).toContain("Missing query for news mode.");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exit-code contract tests (Issue #132)
+// Covers: help, version, missing args, conflicting args, unknown args.
+// Each test explicitly asserts stdout, stderr, and exit code.
+// ---------------------------------------------------------------------------
+
+describe("CLI exit-code contract", () => {
+  // -------------------------------------------------------------------------
+  // TEST 4 — Help
+  // -------------------------------------------------------------------------
+  it("--help exits 0 and prints usage to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli("--help");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("search");
+    expect(stdout).toContain("news");
+    expect(stdout).toContain("scrape");
+    expect(stderr).toBe("");
+  });
+
+  it("-h exits 0 and prints usage to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli("-h");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stderr).toBe("");
+  });
+
+  // -------------------------------------------------------------------------
+  // TEST 5 — Version
+  // -------------------------------------------------------------------------
+  it("--version exits 0 and prints version info to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli("--version");
+
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/query402/i);
+    expect(stdout).toMatch(/\d+\.\d+\.\d+/); // semver-like string
+    expect(stderr).toBe("");
+  });
+
+  it("-V exits 0 and prints version info to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli("-V");
+
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/\d+\.\d+\.\d+/);
+    expect(stderr).toBe("");
+  });
+
+  // -------------------------------------------------------------------------
+  // TEST 1 — Missing required argument: no arguments at all
+  // -------------------------------------------------------------------------
+  it("no arguments exits non-zero and prints usage to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli();
+
+    expect(code).not.toBe(0);
+    expect(stdout).toContain("Usage:");
+    // No mode argument: the error is shown in usage on stdout, not on stderr
+    expect(stderr).toBe("");
+  });
+
+  it("search mode with no query exits non-zero, error on stderr, usage on stdout", async () => {
+    const { code, stdout, stderr } = await runCli("search");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing query for search mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  it("news mode with no query exits non-zero, error on stderr, usage on stdout", async () => {
+    const { code, stdout, stderr } = await runCli("news");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing query for news mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  it("scrape mode with no URL exits non-zero, error on stderr, usage on stdout", async () => {
+    const { code, stdout, stderr } = await runCli("scrape");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing URL for scrape mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  // -------------------------------------------------------------------------
+  // TEST 2 — Conflicting arguments
+  // Providing --provider without a query causes the parser to use the next
+  // positional as the provider value, leaving the query position empty.
+  // -------------------------------------------------------------------------
+  it("search with --provider but no query exits non-zero with error on stderr", async () => {
+    const { code, stdout, stderr } = await runCli("search", "--provider", "search.basic");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing query for search mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  it("scrape with --provider but no URL exits non-zero with error on stderr", async () => {
+    const { code, stdout, stderr } = await runCli("scrape", "--provider", "scrape.page");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing URL for scrape mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  // -------------------------------------------------------------------------
+  // TEST 3 — Unknown argument / mode
+  // -------------------------------------------------------------------------
+  it("unknown mode exits non-zero and prints usage to stdout with empty stderr", async () => {
+    const { code, stdout, stderr } = await runCli("unknown-mode", "some query");
+
+    expect(code).not.toBe(0);
+    expect(stdout).toContain("Usage:");
+    // Unknown mode: treated as invalid, no message on stderr
+    expect(stderr).toBe("");
+  });
+
+  it("unknown flag as first argument exits non-zero and prints usage to stdout", async () => {
+    const { code, stdout, stderr } = await runCli("--definitely-not-a-real-option");
+
+    expect(code).not.toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stderr).toBe("");
+  });
+
+  it("unknown flag after valid mode exits non-zero with error on stderr", async () => {
+    const { code, stdout, stderr } = await runCli("search", "--unknown-flag");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Missing query for search mode.");
+    expect(stdout).toContain("Usage:");
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: invalid input must never silently succeed
+  // -------------------------------------------------------------------------
+  it("invalid input never exits with code 0 to prevent silent automation failures", async () => {
+    const invalidInvocations = [
+      [],
+      ["unknown-mode"],
+      ["search"],
+      ["news"],
+      ["scrape"],
+      ["--definitely-not-a-real-option"],
+      ["search", "--provider", "p"]
+    ];
+
+    for (const args of invalidInvocations) {
+      const { code } = await runCli(...args);
+      expect(code, `Expected non-zero exit for args: ${JSON.stringify(args)}`).not.toBe(0);
     }
   });
 });

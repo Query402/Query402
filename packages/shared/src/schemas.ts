@@ -144,12 +144,7 @@ export const sponsorshipPreviewResponseSchema = z.object({
 
 export const receiptPaymentModeSchema = z.enum(["wallet", "sponsored", "demo"]);
 
-export const receiptPaymentStatusSchema = z.enum([
-  "verified",
-  "settled",
-  "failed",
-  "demo-paid"
-]);
+export const receiptPaymentStatusSchema = z.enum(["verified", "settled", "failed", "demo-paid"]);
 
 export const receiptEvidenceKindSchema = z.enum(["demo", "verified", "settled", "failed"]);
 
@@ -172,3 +167,28 @@ export const query402ReceiptSchema = z.object({
 });
 
 export type Query402Receipt = z.infer<typeof query402ReceiptSchema>;
+
+// --- SLA / analytics band schemas -------------------------------------------
+
+export const latencyBandSchema = z.enum(["fast", "standard", "slow"]);
+export const reliabilityBandSchema = z.enum(["live", "fallback", "demo"]);
+export const paymentModeSchema = z.enum(["demo", "x402", "sponsored"]);
+
+export const slaBadgesSchema = z.object({
+  latencyBand: latencyBandSchema,
+  latencyLabel: z.string().min(1),
+  reliabilityBand: reliabilityBandSchema,
+  reliabilityLabel: z.string().min(1),
+  paymentMode: paymentModeSchema,
+  paymentLabel: z.string().min(1)
+});
+
+export const paidRouteErrorCodeSchema = z.enum([
+  "payment_required",
+  "payment_failed",
+  "provider_error",
+  "internal_error",
+  "validation_error",
+  "rate_limited",
+  "unauthorized"
+]);
