@@ -35,6 +35,8 @@ export interface ProviderExecutionMetadata {
   providerId: string;
   source: SourceType;
   usedFallback: boolean;
+  /** True when the provider exceeded the execution timeout. */
+  timedOut?: boolean;
   fallbackReason?: ExecutionFallbackReason;
   latencyEstimateMs: number;
   observedDurationMs: number;

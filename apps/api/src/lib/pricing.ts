@@ -8,6 +8,18 @@ import type {
   SourceType
 } from "@query402/shared";
 
+export class ProviderCatalogConflictError extends Error {
+  readonly code = "provider_catalog_conflict" as const;
+  readonly providerIds: string[];
+
+  constructor(providerIds: string[]) {
+    const ids = [...providerIds].sort();
+    super(`Provider catalog contains duplicate provider id(s): ${ids.join(", ")}`);
+    this.name = "ProviderCatalogConflictError";
+    this.providerIds = ids;
+  }
+}
+
 const envKeyMapping: Record<string, string[]> = {
   "search.live": ["GROQ_API_KEY"],
   "search.basic": ["GROQ_API_KEY"],
@@ -204,6 +216,28 @@ export const providers: ProviderDefinition[] = [
   }
 ];
 
+/**
+ * Validate catalog identity before any catalog projection is published. IDs
+ * are the routing key, so silently selecting the first duplicate would make
+ * pricing and execution depend on array order.
+ */
+export function validateProviderCatalog(
+  catalog: readonly Pick<ProviderDefinition, "id">[] = providers
+): void {
+  const counts = new Map<string, number>();
+  for (const provider of catalog) {
+    counts.set(provider.id, (counts.get(provider.id) ?? 0) + 1);
+  }
+
+  const duplicates = [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([id]) => id)
+    .sort();
+  if (duplicates.length > 0) {
+    throw new ProviderCatalogConflictError(duplicates);
+  }
+}
+
 export const protectedRouteBasePrices: Record<string, string> = {
   "GET /x402/search": "$0.01",
   "GET /x402/news": "$0.015",
@@ -211,14 +245,17 @@ export const protectedRouteBasePrices: Record<string, string> = {
 };
 
 export function getProviderById(providerId: string) {
+  validateProviderCatalog();
   return providers.find((provider) => provider.id === providerId && provider.enabled);
 }
 
 export function getProvidersByCategory(category: ProviderDefinition["category"]) {
+  validateProviderCatalog();
   return providers.filter((provider) => provider.category === category && provider.enabled);
 }
 
 export function getSortedProviders(): ProviderDefinition[] {
+  validateProviderCatalog();
   return [...providers]
     .filter((provider) => provider.enabled)
     .sort((a, b) => {
