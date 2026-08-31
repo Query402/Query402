@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isSensitiveHeader, redactSensitiveHeaders } from "./redact-headers.js";
+import {
+  isSensitiveHeader,
+  redactSensitiveHeaders,
+  redactSensitiveObject
+} from "./redact-headers.js";
 
 describe("redactSensitiveHeaders", () => {
   it("redacts payment header case-insensitively", () => {
@@ -69,6 +73,42 @@ describe("redactSensitiveHeaders", () => {
 
     expect(result.payment).toBe("[REDACTED]");
     expect(result["X-Custom"]).toBe("value");
+  });
+
+  it("redacts nested payment payload fields while preserving request identifiers", () => {
+    const payload = {
+      authorization: "Bearer secret-token-12345",
+      payment: {
+        signature: "sig-super-secret",
+        proof: "proof-abc",
+        amount: "0.01"
+      },
+      traceId: "trace-123",
+      xRequestId: "req-456",
+      xPaymentAttemptId: "pay_abc123",
+      meta: {
+        paymentResponse: "response-blob",
+        nestedSignature: "nested-signature-secret",
+        requestId: "meta-req-789"
+      }
+    };
+
+    const result = redactSensitiveObject(payload);
+
+    expect(result.authorization).toBe("[REDACTED]");
+    expect(result.payment).toEqual({
+      signature: "[REDACTED]",
+      proof: "[REDACTED]",
+      amount: "0.01"
+    });
+    expect(result.traceId).toBe("trace-123");
+    expect(result.xRequestId).toBe("req-456");
+    expect(result.xPaymentAttemptId).toBe("pay_abc123");
+    expect(result.meta.paymentResponse).toBe("[REDACTED]");
+    expect(result.meta.nestedSignature).toBe("[REDACTED]");
+    expect(result.meta.requestId).toBe("meta-req-789");
+    expect(JSON.stringify(result)).not.toContain("secret-token-12345");
+    expect(JSON.stringify(result)).not.toContain("sig-super-secret");
   });
 });
 
