@@ -10,6 +10,7 @@ import { config } from "./lib/config.js";
 import { UnsafeScrapeUrlError } from "./lib/scrape-url-safety.js";
 import { PaymentEvidenceError } from "./lib/payment-evidence.js";
 import { ProviderTimeoutError, ProviderFailedError } from "./services/query-service.js";
+import { ProviderCatalogConflictError } from "./lib/pricing.js";
 
 export const app = express();
 
@@ -95,6 +96,16 @@ app.use(
         error: error.message,
         type: "provider_failed",
         errorCode: "provider_failed"
+      });
+      return;
+    }
+
+    if (error instanceof ProviderCatalogConflictError) {
+      res.status(409).json({
+        error: error.message,
+        type: "provider_catalog_conflict",
+        errorCode: error.code,
+        providerIds: error.providerIds
       });
       return;
     }
