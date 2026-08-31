@@ -6,6 +6,12 @@ import { savePaymentAttempt, saveUsageEvent, getDetailedAnalyticsData } from "..
 
 export const protectedRouter = Router();
 
+// Prevent browsers and proxies from caching sensitive payment evidence.
+protectedRouter.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 protectedRouter.get("/x402/search", async (req, res, next) => {
   const parsed = searchQuerySchema.safeParse(req.query);
   if (!parsed.success) {

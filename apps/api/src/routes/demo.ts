@@ -88,6 +88,12 @@ function policyErrorResponse(res: Response, policy: ReturnType<typeof authorizeS
 
 export const paidRouter = Router();
 
+// Prevent browsers and proxies from caching sensitive payment evidence.
+paidRouter.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 paidRouter.post("/api/paid/run", async (req, res, next) => {
   try {
     const parsed = paidRunSchema.safeParse(req.body);
