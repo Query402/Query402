@@ -111,18 +111,22 @@ export class DefaultProviderRegistry implements ProviderRegistry {
       items: AdapterExecutionResult["items"],
       source: AdapterExecutionResult["source"],
       execution: Partial<ProviderExecutionMetadata>
-    ): AdapterExecutionResult => ({
-      items,
-      source,
-      execution: {
-        providerId,
+    ): AdapterExecutionResult => {
+      const timedOut = execution.timedOut ?? execution.fallbackReason === "timeout";
+      return {
+        items,
         source,
-        usedFallback: source !== "live",
-        latencyEstimateMs: providerDef.latencyEstimateMs,
-        observedDurationMs: Date.now() - startedAt,
-        ...execution
-      }
-    });
+        execution: {
+          providerId,
+          source,
+          usedFallback: source !== "live",
+          latencyEstimateMs: providerDef.latencyEstimateMs,
+          observedDurationMs: Date.now() - startedAt,
+          ...execution,
+          timedOut
+        }
+      };
+    };
 
     // If it's a strictly deterministic (mock) adapter
     if (providerDef.sourceType === "deterministic-fallback") {
@@ -193,7 +197,8 @@ export class DefaultProviderRegistry implements ProviderRegistry {
           fallbackReason,
           latencyEstimateMs: providerDef.latencyEstimateMs,
           observedDurationMs: Date.now() - startedAt,
-          ...execution
+          ...execution,
+          timedOut: execution.timedOut ?? fallbackReason === "timeout"
         }
       };
     }
@@ -207,7 +212,8 @@ export class DefaultProviderRegistry implements ProviderRegistry {
         fallbackReason: "missing-fallback",
         latencyEstimateMs: providerDef.latencyEstimateMs,
         observedDurationMs: Date.now() - startedAt,
-        ...execution
+        ...execution,
+        timedOut: false
       }
     };
   }

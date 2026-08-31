@@ -1,4 +1,4 @@
-import { getProviderById, providers } from "../lib/pricing.js";
+import { getProviderById, providers, validateProviderCatalog } from "../lib/pricing.js";
 import { registry } from "../providers/index.js";
 import { nanoid } from "nanoid";
 import { QueryResult } from "@query402/shared";
@@ -108,6 +108,7 @@ export async function executeQuery(params: {
 }
 
 export function getCatalog() {
+  validateProviderCatalog();
   const byCategory = {
     search: providers.filter((provider) => provider.category === "search"),
     news: providers.filter((provider) => provider.category === "news"),

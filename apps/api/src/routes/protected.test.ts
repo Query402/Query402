@@ -167,6 +167,21 @@ describe("x402 payment requirement snapshot", () => {
     }
   });
 
+  describe("Cache-Control: no-store header on payment evidence responses", () => {
+    for (const routeCase of routeCases) {
+      it(`GET ${routeCase.route} includes Cache-Control: no-store`, async () => {
+        const app = await createApp();
+        const response = await request(app).get(routeCase.route).query(routeCase.validQuery);
+
+        expect(response.status).toBe(402);
+        expect(
+          response.headers["cache-control"],
+          `route=${routeCase.route} missing Cache-Control: no-store header`
+        ).toBe("no-store");
+      });
+    }
+  });
+
   describe("provider catalog price snapshot", () => {
     const expectedPrices: Record<string, number> = {
       "search.basic": 0.01,

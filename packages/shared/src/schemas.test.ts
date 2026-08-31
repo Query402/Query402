@@ -10,6 +10,7 @@ import {
   receiptEvidenceKindSchema,
   receiptPaymentModeSchema,
   receiptPaymentStatusSchema,
+  reliabilityBandSchema,
   scrapeQuerySchema,
   searchQuerySchema,
   signedGrantSchema,
@@ -18,7 +19,7 @@ import {
   sponsorshipGrantSchema
 } from "./schemas.js";
 
-const validSlaBadge = {
+const _validSlaBadge = {
   latencyBand: "fast" as const,
   reliabilityBand: "demo" as const,
   paymentMode: "demo" as const,
@@ -252,8 +253,7 @@ describe("query402ReceiptSchema", () => {
       mode: "wallet" as const,
       status: "settled" as const,
       evidenceKind: "settled" as const,
-      transactionHash:
-        "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      transactionHash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
       network: "stellar:testnet"
     }
   };

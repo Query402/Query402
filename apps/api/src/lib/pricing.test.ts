@@ -5,14 +5,25 @@ import {
   getProviderById,
   getProvidersByCategory,
   getSortedProviders,
+  ProviderCatalogConflictError,
   protectedRouteBasePrices,
-  providers
+  providers,
+  validateProviderCatalog
 } from "./pricing.js";
 import { applySponsorshipTestEnv } from "../test/sponsorship-test-helpers.js";
 
 applySponsorshipTestEnv();
 
 describe("provider pricing", () => {
+  it("rejects duplicate provider identifiers before publication", () => {
+    const duplicate = [{ id: "search.basic" }, { id: "search.basic" }];
+    expect(() => validateProviderCatalog(duplicate)).toThrow(ProviderCatalogConflictError);
+    try {
+      validateProviderCatalog(duplicate);
+    } catch (error) {
+      expect(error).toMatchObject({ code: "provider_catalog_conflict", providerIds: ["search.basic"] });
+    }
+  });
   it("exposes enabled providers for each category", () => {
     expect(
       getProvidersByCategory("search").every((provider) => provider.category === "search")

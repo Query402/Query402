@@ -39,6 +39,7 @@ import {
 } from "../lib/receipt.js";
 import { WalletSessionMachine, FreighterAdapter, type WalletState } from "../lib/wallet/index.js";
 import PaymentEvidenceBanner from "../components/PaymentEvidenceBanner.js";
+import { formatFreshTimestamp, isFreshTimestamp } from "../lib/freshness.js";
 
 const modeLabels: Record<QueryMode, string> = {
   search: "Search",
@@ -779,7 +780,11 @@ export default function ControlDeckPage() {
             <div className="bay-head bay-head--compact">
               <h2>Signal Output</h2>
               <span>
-                {result ? new Date(result.result.timestamp).toLocaleTimeString() : "waiting"}
+                {result
+                  ? isFreshTimestamp(result.result.timestamp)
+                    ? new Date(result.result.timestamp).toLocaleTimeString()
+                    : "stale"
+                  : "waiting"}
               </span>
             </div>
 
@@ -1057,7 +1062,7 @@ export default function ControlDeckPage() {
                     <strong>{money(tx.amountUsd)}</strong>
                     <span className="source-badge demo">demo</span>
                   </p>
-                  <small>{new Date(tx.createdAt).toLocaleString()}</small>
+                  <small>{formatFreshTimestamp(tx.createdAt)}</small>
                 </div>
               ))
             )}
@@ -1071,7 +1076,7 @@ export default function ControlDeckPage() {
                   <span>{tx.providerId}</span>
                   <strong>{money(tx.amountUsd)}</strong>
                 </p>
-                <small>{new Date(tx.createdAt).toLocaleString()}</small>
+                <small>{formatFreshTimestamp(tx.createdAt)}</small>
               </div>
             ))}
           </div>
@@ -1087,7 +1092,7 @@ export default function ControlDeckPage() {
                   <strong>{usage.latencyMs}ms</strong>
                 </p>
                 <small>
-                  {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
+                  {money(usage.priceUsd)} · {formatFreshTimestamp(usage.createdAt)}
                 </small>
               </div>
             ))}
