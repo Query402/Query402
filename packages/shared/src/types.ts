@@ -21,6 +21,7 @@ export type LatencyBucket = "<1s" | "1-3s" | "3-10s" | ">10s" | "unknown";
 export type LatencyBand = "fast" | "standard" | "slow";
 export type ReliabilityBand = "demo" | "fallback" | "live";
 export type PaymentMode = "demo" | "x402" | "sponsored";
+export type PaymentModeBand = "x402" | "demo" | "sponsored" | "not-verified";
 
 export interface SlaBadges {
   latencyBand: LatencyBand;
@@ -40,10 +41,6 @@ export interface ProviderExecutionMetadata {
   observedDurationMs: number;
   circuitBreakerState?: CircuitBreakerState;
 }
-
-export type LatencyBand = "fast" | "standard" | "slow" | "not-verified";
-export type ReliabilityBand = "live" | "fallback" | "demo" | "not-verified";
-export type PaymentModeBand = "x402" | "demo" | "sponsored" | "not-verified";
 
 export interface ProviderSlaBadge {
   latencyBand: LatencyBand;
@@ -122,10 +119,7 @@ export interface FailedPaymentEvidence extends BasePaymentEvidence {
 }
 
 export type PaymentEvidence =
-  | DemoPaymentEvidence
-  | VerifiedPaymentEvidence
-  | SettledPaymentEvidence
-  | FailedPaymentEvidence;
+  DemoPaymentEvidence | VerifiedPaymentEvidence | SettledPaymentEvidence | FailedPaymentEvidence;
 
 export interface UsageEvent {
   id: string;
@@ -291,16 +285,18 @@ export interface PrivacySafeAnalyticsRecord {
   id: string;
   timestamp: string;
   payerAddress: string;
-  volumeType: 'demo' | 'settled';
+  volumeType: "demo" | "settled";
   amount: number;
   asset: string;
 }
 
-export interface PaginatedAnalyticsResponse {
-  success: boolean;
+/**
+ * Cursor-based pagination metadata returned alongside paginated results
+ */
+export interface CursorPaginationMeta {
   hasMore: boolean;
   nextCursor: string | null;
-  data: PrivacySafeAnalyticsRecord[];
+  limit: number;
 }
 
 /**
