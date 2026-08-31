@@ -41,6 +41,7 @@ function usage() {
   console.log('  npm run cli -- news "stablecoin micropayments" --provider news.fast');
   console.log('  npm run cli -- scrape "https://example.com" --provider scrape.page');
   console.log("Options:");
+  console.log("  --help, -h         Show this help and exit");
   console.log("  --provider <id>    Provider ID (default: search.basic / news.fast / scrape.page)");
   console.log("  --receipt, --json  Output structured JSON receipt only");
 }

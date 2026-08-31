@@ -113,6 +113,31 @@ describe("CLI exit-code contract", () => {
     expect(stderr).toBe("");
   });
 
+  it("search --help exits 0 and prints usage without running a query", async () => {
+    const { code, stdout, stderr } = await runCli("search", "--help");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--help, -h");
+    expect(stderr).toBe("");
+  });
+
+  it("news -h exits 0 and prints usage without running a query", async () => {
+    const { code, stdout, stderr } = await runCli("news", "-h");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stderr).toBe("");
+  });
+
+  it("scrape --help exits 0 and prints usage without running a query", async () => {
+    const { code, stdout, stderr } = await runCli("scrape", "--help");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stderr).toBe("");
+  });
+
   // -------------------------------------------------------------------------
   // TEST 5 — Version
   // -------------------------------------------------------------------------
