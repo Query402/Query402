@@ -86,6 +86,40 @@ export function getFacilitatorConfigured(): boolean {
   );
 }
 
+/**
+ * A sanitized snapshot of the deployment configuration.
+ * Contains only booleans and safe enum values — never secrets, private keys, or auth headers.
+ */
+export interface ConfigSnapshot {
+  network: string;
+  demoMode: boolean;
+  facilitatorConfigured: boolean;
+  facilitatorApiKeyConfigured: boolean;
+  payToConfigured: boolean;
+  sponsorshipEnabled: boolean;
+  sponsorshipSigningSecretConfigured: boolean;
+  anyProviderKeyConfigured: boolean;
+}
+
+/** Safe to expose in public health/diagnostics responses — no secret values. */
+export function getConfigSnapshot(): ConfigSnapshot {
+  return {
+    network: config.STELLAR_NETWORK,
+    demoMode: config.demoMode,
+    facilitatorConfigured: Boolean(config.X402_FACILITATOR_URL),
+    facilitatorApiKeyConfigured: Boolean(config.X402_FACILITATOR_API_KEY),
+    payToConfigured: Boolean(config.X402_PAY_TO_ADDRESS),
+    sponsorshipEnabled: config.sponsorshipEnabled,
+    sponsorshipSigningSecretConfigured: Boolean(config.SPONSORSHIP_SIGNING_SECRET),
+    anyProviderKeyConfigured: Boolean(
+      config.BRAVE_API_KEY ||
+        config.SERPAPI_API_KEY ||
+        config.NEWS_API_KEY ||
+        config.GROQ_API_KEY
+    )
+  };
+}
+
 export function requirePayToAddress(): string {
   const addr = parsed.data.X402_PAY_TO_ADDRESS;
   if (!addr || addr.length === 0) {
