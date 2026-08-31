@@ -16,6 +16,12 @@ describe("timestamp freshness", () => {
     expect(isStaleTimestamp("not-a-date", now)).toBe(true);
   });
 
+  it("treats whitespace-only timestamps as stale", () => {
+    expect(parseTimestamp("   ")).toBeNull();
+    expect(isFreshTimestamp("   ", now)).toBe(false);
+    expect(isStaleTimestamp("   ", now)).toBe(true);
+  });
+
   it("uses an exclusive expiry boundary", () => {
     const boundary = new Date(now - DEFAULT_TIMESTAMP_MAX_AGE_MS).toISOString();
     expect(isFreshTimestamp(boundary, now)).toBe(false);

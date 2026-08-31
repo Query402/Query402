@@ -140,6 +140,7 @@ describe("ProviderRegistry", () => {
       fallbackReason: "timeout",
       timedOut: true
     });
+    expect(typeof result.execution.timedOut).toBe("boolean");
   });
 
   it("marks successful executions as not timed out", async () => {

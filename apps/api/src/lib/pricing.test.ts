@@ -24,6 +24,19 @@ describe("provider pricing", () => {
       expect(error).toMatchObject({ code: "provider_catalog_conflict", providerIds: ["search.basic"] });
     }
   });
+
+  it("reports every duplicate id in deterministic order", () => {
+    const duplicate = [
+      { id: "zeta.provider" },
+      { id: "alpha.provider" },
+      { id: "zeta.provider" },
+      { id: "alpha.provider" },
+    ];
+
+    expect(() => validateProviderCatalog(duplicate)).toThrow(
+      "Provider catalog contains duplicate provider id(s): alpha.provider, zeta.provider",
+    );
+  });
   it("exposes enabled providers for each category", () => {
     expect(
       getProvidersByCategory("search").every((provider) => provider.category === "search")
