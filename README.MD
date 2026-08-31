@@ -2,6 +2,7 @@
 > Query402 participates in the Stellar Wave program. This public
 > repository is the canonical workspace for Wave issues and contributions.
 
+
 <div align="center">
   <img src="./public/Query402-logo.png" alt="Query402 logo" width="180" />
   <h1>Query402</h1>
