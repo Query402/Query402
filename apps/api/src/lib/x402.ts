@@ -75,6 +75,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
   // Fail closed: never advertise payment requirements or record demo
   // evidence with an empty pay-to address.
   if (!config.X402_PAY_TO_ADDRESS) {
+    res.set("Cache-Control", "no-store");
     return res.status(503).json({
       error: "Payment configuration missing",
       demoMode: true,
@@ -108,6 +109,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
     expectedPrice: price
   });
 
+  res.set("Cache-Control", "no-store");
   return res.status(402).json({
     error: "Payment Required",
     errorCode: "payment_required",
@@ -332,6 +334,10 @@ export function createX402Middleware() {
   const paymentMiddleware = paymentMiddlewareFromHTTPServer(httpServer);
 
   return async (req: Request, res: Response, next: NextFunction) => {
+    // Prevent browsers and proxies from caching sensitive payment evidence.
+    if (req.path.startsWith("/x402/")) {
+      res.set("Cache-Control", "no-store");
+    }
     const originalJson = res.json.bind(res);
     res.json = function (body: unknown) {
       if (
