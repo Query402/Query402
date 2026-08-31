@@ -121,4 +121,39 @@ describe("demo-mode x402 flow", () => {
     expect(scrapeResponse.status).toBe(200);
     expect(scrapeResponse.body.result.priceUsd).toBe(0.04);
   });
+
+  describe("fail-closed pay-to configuration", () => {
+    it("refuses demo paid requests with 503 when the pay-to address is missing", async () => {
+      delete process.env.X402_PAY_TO_ADDRESS;
+      const app = await createDemoApp();
+
+      const challenge = await request(app)
+        .get("/x402/search")
+        .query({ provider: "search.basic", q: "stellar x402" });
+
+      expect(challenge.status).toBe(503);
+      expect(challenge.body).toMatchObject({
+        error: "Payment configuration missing",
+        demoMode: true
+      });
+      expect(challenge.body.accepts).toBeUndefined();
+
+      const paidRetry = await request(app)
+        .get("/x402/search")
+        .query({ provider: "search.basic", q: "stellar x402" })
+        .set("x-query402-demo-paid", "true")
+        .set("x-demo-payer", TEST_WALLET);
+
+      expect(paidRetry.status).toBe(503);
+      expect(executeQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("fails at startup when real paid routes are enabled without a pay-to address", async () => {
+      applyApiTestEnv({ DEMO_MODE: "false" });
+      delete process.env.X402_PAY_TO_ADDRESS;
+
+      const { createX402Middleware } = await import("../lib/x402.js");
+      expect(() => createX402Middleware()).toThrow(/X402_PAY_TO_ADDRESS/);
+    });
+  });
 });

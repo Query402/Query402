@@ -75,10 +75,12 @@ export function buildTestPaymentAttempt(overrides: Partial<PaymentAttempt> = {})
   };
 }
 
-export function buildPaidQueryFixture(overrides: {
-  payment?: Partial<PaymentAttempt>;
-  usage?: Partial<UsageEvent>;
-} = {}): PaidQueryFixture {
+export function buildPaidQueryFixture(
+  overrides: {
+    payment?: Partial<PaymentAttempt>;
+    usage?: Partial<UsageEvent>;
+  } = {}
+): PaidQueryFixture {
   const payment: PaymentAttempt = {
     id: "pay_fixture_0001",
     endpoint: "/x402/search",

@@ -35,6 +35,20 @@ function sanitizeErrorMessage(message: string): string {
     .replace(/https?:\/\/\S+/gi, "[redacted-url]");
 }
 
+export class ProviderTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderTimeoutError";
+  }
+}
+
+export class ProviderFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderFailedError";
+  }
+}
+
 export async function executeQuery(params: {
   mode: "search" | "news" | "scrape";
   provider: string;
@@ -66,7 +80,11 @@ export async function executeQuery(params: {
       },
       "provider execution failed"
     );
-    throw error;
+    const msg = getErrorMessage(error);
+    if (msg.toLowerCase().includes("timeout")) {
+      throw new ProviderTimeoutError(msg);
+    }
+    throw new ProviderFailedError(msg);
   }
 
   const latencyMs = execution.execution.observedDurationMs;
@@ -101,5 +119,52 @@ export function getCatalog() {
     providerCount: providers.length,
     providers,
     byCategory
+  };
+}
+
+import { getUsageEvents } from "../lib/persistence.js";
+import { formatPrivacySafeAnalytics } from "./analytics-privacy.js";
+import { PaginatedAnalyticsResponse } from "@query402/shared";
+
+/**
+ * Fetches privacy-safe, cursor-paginated analytics data from the JSON file layer.
+ */
+export async function fetchPaginatedAnalytics(
+  limit: number = 10,
+  cursor: string | null = null
+): Promise<PaginatedAnalyticsResponse> {
+  // 1. Read all logs from our local JSON file storage engine
+  const allEvents = getUsageEvents();
+
+  let sliceStartIndex = 0;
+
+  // 2. If a cursor is provided, find its index to start our next page chunk
+  if (cursor) {
+    const cursorIndex = allEvents.findIndex((event: any) => event.id === cursor);
+    if (cursorIndex !== -1) {
+      // Start slicing immediately after the cursor item
+      sliceStartIndex = cursorIndex + 1;
+    }
+  }
+
+  // 3. Extract the chunk + 1 extra item to check if a next page exists
+  const fetchCount = limit + 1;
+  const pageChunk = allEvents.slice(sliceStartIndex, sliceStartIndex + fetchCount);
+
+  const hasMore = pageChunk.length > limit;
+  // Trim down to the requested page limit
+  const validRecords = hasMore ? pageChunk.slice(0, limit) : pageChunk;
+
+  // 4. Filter and mask the records safely via our privacy module
+  const cleanData = formatPrivacySafeAnalytics(validRecords);
+
+  // 5. Pick the ID of the last element in our current view as the next cursor token
+  const nextCursor = hasMore && cleanData.length > 0 ? cleanData[cleanData.length - 1].id : null;
+
+  return {
+    success: true,
+    hasMore,
+    nextCursor,
+    data: cleanData
   };
 }

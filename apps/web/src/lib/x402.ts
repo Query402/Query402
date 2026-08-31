@@ -2,6 +2,7 @@ import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import type { ClientStellarSigner } from "@x402/stellar";
 import { ExactStellarScheme } from "@x402/stellar/exact/client";
+import { buildPaymentProofLinks } from "@query402/shared";
 import type { PaidQueryResponse } from "../types.js";
 import { getIdempotencyKey, buildPaidClientRequestKey } from "./idempotency.js";
 
@@ -21,6 +22,22 @@ function createMachineSigner(
       return res;
     }
   };
+}
+
+function enrichWithProofLinks(payload: PaidQueryResponse): PaidQueryResponse {
+  if (payload?.payment?.evidence) {
+    const ev = payload.payment.evidence;
+    if (!ev.proofLinks) {
+      ev.proofLinks = buildPaymentProofLinks({
+        transactionHash: ev.transactionHash,
+        payerPublicKey: ev.payer,
+        payToAddress: ev.payTo,
+        network: ev.network,
+        asset: ev.asset ?? undefined
+      });
+    }
+  }
+  return payload;
 }
 
 export async function runWalletPaidQuery(input: {
@@ -84,5 +101,5 @@ export async function runWalletPaidQuery(input: {
     throw new Error(JSON.stringify(payload));
   }
 
-  return payload as PaidQueryResponse;
+  return enrichWithProofLinks(payload as PaidQueryResponse);
 }

@@ -9,7 +9,7 @@ import type {
   VerifyResponse
 } from "@x402/core/types";
 import type { HTTPRequestContext } from "@x402/core/server";
-import { config } from "./config.js";
+import { config, requirePayToAddress } from "./config.js";
 import { getProviderById } from "./pricing.js";
 import { persistPaymentAndUsage, savePaymentAttempt } from "./persistence.js";
 
@@ -295,7 +295,7 @@ export function buildDemoPaymentEvidence(req: Request): DemoPaymentEvidence {
     providerId,
     amountUsd,
     network: config.STELLAR_NETWORK,
-    payTo: config.X402_PAY_TO_ADDRESS,
+    payTo: requirePayToAddress(),
     facilitatorUrl: config.X402_FACILITATOR_URL,
     payer: req.header("x-demo-payer") ?? "demo-agent"
   };
@@ -349,6 +349,7 @@ export async function persistPaymentEvidence(
     facilitatorResult:
       "facilitatorResult" in evidence ? toJsonRecord(evidence.facilitatorResult) : undefined,
     error: evidence.kind === "failed" ? evidence.error : undefined,
+    errorCode: evidence.kind === "failed" ? "payment_invalid" : undefined,
     createdAt: now
   };
 

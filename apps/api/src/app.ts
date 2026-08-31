@@ -9,6 +9,7 @@ import { logger } from "./lib/logger.js";
 import { config } from "./lib/config.js";
 import { UnsafeScrapeUrlError } from "./lib/scrape-url-safety.js";
 import { PaymentEvidenceError } from "./lib/payment-evidence.js";
+import { ProviderTimeoutError, ProviderFailedError } from "./services/query-service.js";
 
 export const app = express();
 
@@ -65,7 +66,8 @@ app.use(
     if (error instanceof UnsafeScrapeUrlError) {
       res.status(400).json({
         error: "Scrape URL is not allowed",
-        type: "unsafe_scrape_url"
+        type: "unsafe_scrape_url",
+        errorCode: "invalid_query"
       });
       return;
     }
@@ -73,14 +75,34 @@ app.use(
     if (error instanceof PaymentEvidenceError) {
       res.status(400).json({
         error: error.message,
-        type: "payment_evidence_error"
+        type: "payment_evidence_error",
+        errorCode: "payment_invalid"
+      });
+      return;
+    }
+
+    if (error instanceof ProviderTimeoutError) {
+      res.status(504).json({
+        error: error.message,
+        type: "provider_timeout",
+        errorCode: "provider_timeout"
+      });
+      return;
+    }
+
+    if (error instanceof ProviderFailedError) {
+      res.status(502).json({
+        error: error.message,
+        type: "provider_failed",
+        errorCode: "provider_failed"
       });
       return;
     }
 
     res.status(500).json({
       error: error.message,
-      type: "internal_error"
+      type: "internal_error",
+      errorCode: "internal_error"
     });
   }
 );

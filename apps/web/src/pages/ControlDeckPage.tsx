@@ -17,8 +17,8 @@ import {
   Sparkles,
   TerminalSquare,
   Check,
-  AlertTriangle,
   Clock,
+  Copy,
   XCircle
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -60,6 +60,64 @@ function toTokenBaseUnits(amountUsd: number) {
   return normalizedAmount.replace(".", "").replace(/^0+/, "") || "0";
 }
 
+function PayToAddressDisplay({
+  address,
+  network,
+  configured
+}: {
+  address?: string;
+  network?: string;
+  configured?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy address", err);
+    }
+  };
+
+  const isTestnet =
+    network?.toLowerCase().includes("testnet") ||
+    network?.toLowerCase().includes("test sdf network") ||
+    network?.toLowerCase().includes("september 2015");
+
+  if (!configured || !address) {
+    return (
+      <span className="pay-to-warning-badge" title="No payout address configured!">
+        <AlertTriangle size={13} style={{ display: "inline-block", marginRight: "4px", verticalAlign: "-2px" }} />
+        Missing pay-to address
+      </span>
+    );
+  }
+
+  return (
+    <span className="pay-to-info-wrapper">
+      <strong className="pay-to-address-text" title={address}>
+        {address.slice(0, 6)}...{address.slice(-6)}
+      </strong>
+      {isTestnet && <span className="pay-to-network-badge">Testnet</span>}
+      <button
+        onClick={handleCopy}
+        className="pay-to-copy-button"
+        title="Copy full public address"
+        type="button"
+      >
+        {copied ? (
+          <Check size={11} className="copy-icon success" style={{ color: "#37e0af" }} />
+        ) : (
+          <Copy size={11} className="copy-icon" />
+        )}
+      </button>
+    </span>
+  );
+}
+
 export default function ControlDeckPage() {
   const [mode, setMode] = useState<QueryMode>("search");
   const [paymentMode, setPaymentMode] = useState<"wallet" | "sponsored">("wallet");
@@ -80,10 +138,11 @@ export default function ControlDeckPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>(modeDefaultProvider.search);
   const [result, setResult] = useState<PaidQueryResponse | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
+  const [privacySafeAnalytics, setPrivacySafeAnalytics] = useState<PrivacySafeAnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sponsorshipEnabled, setSponsorshipEnabled] = useState(false);
+  const [healthDiagnostics, setHealthDiagnostics] = useState<{ network?: string; payToConfigured?: boolean; payToAddress?: string } | null>(null);
   const [preview, setPreview] = useState<SponsorshipPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -162,9 +221,7 @@ export default function ControlDeckPage() {
         id: "receipt",
         label: "Receipt/export available",
         status: hasReceipts ? "pass" : "pending",
-        detail: hasReceipts
-          ? `${analytics!.recentTransactions.length} transaction(s)`
-          : undefined
+        detail: hasReceipts ? `${analytics!.recentTransactions.length} transaction(s)` : undefined
       }
     ];
   }, [providers, result, analytics, demoMode]);
@@ -191,12 +248,16 @@ export default function ControlDeckPage() {
   }
 
   async function refreshMetrics() {
-    setIsAnalyticsLoading(true);
+    const data = await fetchJson<AnalyticsResponse>(`${API_BASE_URL}/api/analytics`);
+    setAnalytics(data);
+
+    // Fetch privacy-safe analytics
     try {
-      const data = await fetchJson<AnalyticsResponse>(`${API_BASE_URL}/api/analytics`);
-      setAnalytics(data);
-    } finally {
-      setIsAnalyticsLoading(false);
+      const privacySafeData = await fetchJson<PrivacySafeAnalyticsResponse>(`${API_BASE_URL}/api/v1/analytics?limit=5`);
+      setPrivacySafeAnalytics(privacySafeData);
+    } catch (analyticsError) {
+      // Silently fail to fetch privacy-safe analytics if endpoint not available
+      console.warn("Could not fetch privacy-safe analytics", analyticsError);
     }
   }
 
@@ -274,6 +335,11 @@ export default function ControlDeckPage() {
       setSelectedProvider(modeDefaultProvider.search);
       setSponsorshipEnabled(sponsorshipActive);
       setDemoMode(health.demoMode ?? false);
+      setHealthDiagnostics({
+        network: health.network ?? health.diagnostics?.network,
+        payToConfigured: health.diagnostics?.payToConfigured ?? false,
+        payToAddress: health.diagnostics?.payToAddress
+      });
       await refreshMetrics();
     }
 
@@ -578,7 +644,74 @@ export default function ControlDeckPage() {
                     <span className={`source-badge ${provider.sourceType}`}>
                       {provider.sourceType}
                     </span>
+                    <span className={`provenance-badge ${provider.provenance}`}>
+                      {provider.provenance}
+                    </span>
                   </div>
+                  <div className="provider-sla-badges">
+                    <span
+                      className={`sla-badge sla-latency sla-latency--${provider.slaBadge.latencyBand}`}
+                      title={provider.slaBadge.badgeCopy}
+                    >
+                      <Clock4 size={10} />{" "}
+                      {provider.slaBadge.latencyBand === "fast"
+                        ? "Fast"
+                        : provider.slaBadge.latencyBand === "standard"
+                          ? "Standard"
+                          : provider.slaBadge.latencyBand === "slow"
+                            ? "Slow"
+                            : "Not verified"}
+                    </span>
+                    <span
+                      className={`sla-badge sla-reliability sla-reliability--${provider.slaBadge.reliabilityBand}`}
+                      title={provider.slaBadge.badgeCopy}
+                    >
+                      <ShieldCheck size={10} />{" "}
+                      {provider.slaBadge.reliabilityBand === "live"
+                        ? "Live API"
+                        : provider.slaBadge.reliabilityBand === "demo"
+                          ? "Demo"
+                          : provider.slaBadge.reliabilityBand === "fallback"
+                            ? "Fallback"
+                            : "Not verified"}
+                    </span>
+                    <span
+                      className={`sla-badge sla-payment sla-payment--${provider.slaBadge.paymentMode}`}
+                      title={provider.slaBadge.badgeCopy}
+                    >
+                      <CircleDollarSign size={10} />{" "}
+                      {provider.slaBadge.paymentMode === "x402"
+                        ? "x402"
+                        : provider.slaBadge.paymentMode === "demo"
+                          ? "Demo"
+                          : provider.slaBadge.paymentMode === "sponsored"
+                            ? "Sponsored"
+                            : "Not verified"}
+                    </span>
+                  </div>
+                  {provider.slaBadges ? (
+                    <div className="provider-badges">
+                      <span
+                        className={`badge badge-latency badge-latency-${provider.slaBadges.latencyBand}`}
+                      >
+                        {provider.slaBadges.latencyLabel}
+                      </span>
+                      <span
+                        className={`badge badge-reliability badge-reliability-${provider.slaBadges.reliabilityBand}`}
+                      >
+                        {provider.slaBadges.reliabilityLabel}
+                      </span>
+                      <span
+                        className={`badge badge-payment badge-payment-${provider.slaBadges.paymentMode}`}
+                      >
+                        {provider.slaBadges.paymentLabel}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="provider-badges">
+                      <span className="badge badge-unknown">Not verified</span>
+                    </div>
+                  )}
                 </button>
               ))
             )}
@@ -605,7 +738,12 @@ export default function ControlDeckPage() {
                 units)
               </p>
               <p className="action-label">
-                Pay-to: <strong>dynamic via x402</strong>
+                Pay-to:{" "}
+                <PayToAddressDisplay
+                  address={healthDiagnostics?.payToAddress}
+                  network={healthDiagnostics?.network}
+                  configured={healthDiagnostics?.payToConfigured}
+                />
               </p>
             </div>
             <button
@@ -759,70 +897,122 @@ export default function ControlDeckPage() {
           <div className="orbital">
             <div className="orbital-center">
               <Gauge size={20} />
-              {showAnalyticsSkeleton ? (
-                <>
-                  <span className="analytics-skeleton analytics-skeleton--orbital" />
-                  <span className="analytics-skeleton analytics-skeleton--caption" />
-                </>
-              ) : (
-                <>
-                  <p>{money(analytics?.totalSpendUsd ?? 0)}</p>
-                  <span>Total spend</span>
-                </>
-              )}
+              <p>{money(analytics?.totalSpendUsd ?? 0)}</p>
+              <span>Total spend (legacy)</span>
             </div>
           </div>
 
-          <div className="analytics-panel">
-            <h3>Spend by category</h3>
-            {showAnalyticsSkeleton ? (
-              <AnalyticsSkeletonRows count={3} />
-            ) : !hasUsageHistory ? (
-              <p className="panel-empty-note">
-                No spend recorded yet. Run a paid query to see category breakdown.
-              </p>
-            ) : (
-              <ul>
-                <li>
-                  <span>Search</span>
-                  <strong>{money(analytics!.spendByCategory.search)}</strong>
-                </li>
-                <li>
-                  <span>News</span>
-                  <strong>{money(analytics!.spendByCategory.news)}</strong>
-                </li>
-                <li>
-                  <span>Scrape</span>
-                  <strong>{money(analytics!.spendByCategory.scrape)}</strong>
-                </li>
-              </ul>
-            )}
-          </div>
+          {/* Privacy-safe Analytics Section */}
+          {privacySafeAnalytics && (
+            <div className="analytics-panel privacy-safe">
+              <h3>
+                <TrendingUp size={16} /> On-Chain Analytics (Privacy-Safe)
+              </h3>
+              
+              {/* Settled Volume */}
+              <div className="settlement-group">
+                <div className="settlement-header">
+                  <span className="badge settled">SETTLED</span>
+                  <span className="settlement-label">On-Chain Confirmed</span>
+                </div>
+                <ul>
+                  <li>
+                    <span>Volume</span>
+                    <strong>${privacySafeAnalytics.aggregation.settled.totalVolumeUsd.toFixed(6)}</strong>
+                  </li>
+                  <li>
+                    <span>Queries</span>
+                    <strong>{privacySafeAnalytics.aggregation.settled.totalCount}</strong>
+                  </li>
+                  <li className="category-item">
+                    <span>Search</span>
+                    <strong>${privacySafeAnalytics.aggregation.settled.byCategory.search.volumeUsd.toFixed(6)}</strong>
+                  </li>
+                  <li className="category-item">
+                    <span>News</span>
+                    <strong>${privacySafeAnalytics.aggregation.settled.byCategory.news.volumeUsd.toFixed(6)}</strong>
+                  </li>
+                  <li className="category-item">
+                    <span>Scrape</span>
+                    <strong>${privacySafeAnalytics.aggregation.settled.byCategory.scrape.volumeUsd.toFixed(6)}</strong>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Verified Volume */}
+              {privacySafeAnalytics.aggregation.verified.totalCount > 0 && (
+                <div className="settlement-group">
+                  <div className="settlement-header">
+                    <span className="badge verified">VERIFIED</span>
+                    <span className="settlement-label">Verified Payments</span>
+                  </div>
+                  <ul>
+                    <li>
+                      <span>Volume</span>
+                      <strong>${privacySafeAnalytics.aggregation.verified.totalVolumeUsd.toFixed(6)}</strong>
+                    </li>
+                    <li>
+                      <span>Queries</span>
+                      <strong>{privacySafeAnalytics.aggregation.verified.totalCount}</strong>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Demo-Paid Volume */}
+              {privacySafeAnalytics.aggregation.demoPaid.totalCount > 0 && (
+                <div className="settlement-group demo">
+                  <div className="settlement-header">
+                    <span className="badge demo">DEMO</span>
+                    <span className="settlement-label">Demo Queries (No Payment)</span>
+                  </div>
+                  <ul>
+                    <li>
+                      <span>Queries</span>
+                      <strong>{privacySafeAnalytics.aggregation.demoPaid.totalCount}</strong>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Failed Volume */}
+              {privacySafeAnalytics.aggregation.failed.totalCount > 0 && (
+                <div className="settlement-group failed">
+                  <div className="settlement-header">
+                    <span className="badge failed">
+                      <AlertCircle size={12} /> FAILED
+                    </span>
+                    <span className="settlement-label">Failed Attempts</span>
+                  </div>
+                  <ul>
+                    <li>
+                      <span>Attempts</span>
+                      <strong>{privacySafeAnalytics.aggregation.failed.totalCount}</strong>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              <p className="privacy-notice">✓ Query text and URLs redacted. Payer addresses hashed. Raw payments never exposed.</p>
+            </div>
+          )}
 
           <div className="analytics-panel">
-            <h3>Execution reliability</h3>
-            {showAnalyticsSkeleton ? (
-              <AnalyticsSkeletonRows count={3} />
-            ) : !hasUsageHistory ? (
-              <p className="panel-empty-note">
-                No execution telemetry yet. Run a query to see live and fallback counts.
-              </p>
-            ) : (
-              <ul>
-                <li>
-                  <span>Live</span>
-                  <strong>{analytics!.executionSummary.liveExecutions}</strong>
-                </li>
-                <li>
-                  <span>Fallback</span>
-                  <strong>{analytics!.executionSummary.fallbackExecutions}</strong>
-                </li>
-                <li>
-                  <span>Timeouts</span>
-                  <strong>{analytics!.executionSummary.timeoutExecutions}</strong>
-                </li>
-              </ul>
-            )}
+            <h3>Spend by category (legacy)</h3>
+            <ul>
+              <li>
+                <span>Search</span>
+                <strong>{money(analytics?.spendByCategory.search ?? 0)}</strong>
+              </li>
+              <li>
+                <span>News</span>
+                <strong>{money(analytics?.spendByCategory.news ?? 0)}</strong>
+              </li>
+              <li>
+                <span>Scrape</span>
+                <strong>{money(analytics?.spendByCategory.scrape ?? 0)}</strong>
+              </li>
+            </ul>
           </div>
 
           <div className="analytics-panel">
@@ -830,14 +1020,20 @@ export default function ControlDeckPage() {
             {showAnalyticsSkeleton ? (
               <AnalyticsSkeletonRows count={3} />
             ) : !hasUsageHistory ? (
-              <p className="panel-empty-note">
-                No spend recorded yet.
-              </p>
+              <p className="panel-empty-note">No spend recorded yet.</p>
             ) : (
               <ul>
                 {Object.entries(analytics!.spendByPaymentSource).map(([source, amount]) => (
                   <li key={source}>
-                    <span>{source === "demo" ? "Demo" : source === "sponsored" ? "Sponsored" : source === "wallet" ? "Wallet" : source}</span>
+                    <span>
+                      {source === "demo"
+                        ? "Demo"
+                        : source === "sponsored"
+                          ? "Sponsored"
+                          : source === "wallet"
+                            ? "Wallet"
+                            : source}
+                    </span>
                     <strong>{money(amount)}</strong>
                   </li>
                 ))}
@@ -868,73 +1064,33 @@ export default function ControlDeckPage() {
           </div>
 
           <div className="feed-panel">
-            <h3>Real settled payments (on-chain)</h3>
-            {showAnalyticsSkeleton ? (
-              <AnalyticsSkeletonRows count={3} />
-            ) : (analytics?.recentSettledPayments ?? []).length === 0 ? (
-              <p className="panel-empty-note">
-                No on-chain settlements yet. Wallet-paid transactions appear here.
-              </p>
-            ) : (
-              analytics!.recentSettledPayments.slice(0, 5).map((tx) => (
-                <div key={tx.id} className="feed-row">
-                  <p>
-                    <span>{tx.providerId}</span>
-                    <strong>{money(tx.amountUsd)}</strong>
-                    <span className="source-badge settled">settled</span>
-                  </p>
-                  <small>{new Date(tx.createdAt).toLocaleString()}</small>
-                  {tx.transactionHash && (
-                    <small className="proof-link">
-                      <a
-                        href={`https://stellar.expert/explorer/testnet/tx/${tx.transactionHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        tx: {tx.transactionHash.slice(0, 8)}...
-                      </a>
-                    </small>
-                  )}
-                </div>
-              ))
-            )}
+            <h3>Recent transactions (legacy)</h3>
+            {(analytics?.recentTransactions ?? []).slice(0, 5).map((tx) => (
+              <div key={tx.id} className="feed-row">
+                <p>
+                  <span>{tx.providerId}</span>
+                  <strong>{money(tx.amountUsd)}</strong>
+                </p>
+                <small>{new Date(tx.createdAt).toLocaleString()}</small>
+              </div>
+            ))}
           </div>
 
           <div className="feed-panel">
-            <h3>Execution feed</h3>
-            {showAnalyticsSkeleton ? (
-              <AnalyticsSkeletonRows count={3} />
-            ) : (analytics?.recentUsage ?? []).length === 0 ? (
-              <p className="panel-empty-note">
-                No executions yet. Query runs and latency traces will appear here.
-              </p>
-            ) : (
-              analytics!.recentUsage.slice(0, 5).map((usage) => (
-                <div key={usage.id} className="feed-row">
-                  <p>
-                    <span>
-                      {usage.mode.toUpperCase()} · {usage.providerId}
-                    </span>
-                    <strong>{usage.latencyMs}ms</strong>
-                  </p>
-                  <small>
-                    {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
-                    {usage.execution
-                      ? ` · ${usage.execution.source}${
-                          usage.execution.fallbackReason
-                            ? ` (${usage.execution.fallbackReason})`
-                            : ""
-                        }`
-                      : ""}
-                    {usage.priceOutlier ? (
-                      <span className="price-outlier-warning" title={usage.priceOutlierReason}>
-                        <AlertTriangle size={12} /> Price outlier
-                      </span>
-                    ) : null}
-                  </small>
-                </div>
-              ))
-            )}
+            <h3>Execution feed (legacy)</h3>
+            {(analytics?.recentUsage ?? []).slice(0, 5).map((usage) => (
+              <div key={usage.id} className="feed-row">
+                <p>
+                  <span>
+                    {usage.mode.toUpperCase()} · {usage.providerId}
+                  </span>
+                  <strong>{usage.latencyMs}ms</strong>
+                </p>
+                <small>
+                  {money(usage.priceUsd)} · {new Date(usage.createdAt).toLocaleString()}
+                </small>
+              </div>
+            ))}
           </div>
 
           <div className="script-panel">
@@ -1214,9 +1370,7 @@ function EvidenceRow(props: { item: EvidenceCheckItem }) {
   const { item } = props;
   return (
     <li className="evidence-item">
-      <span className={`evidence-icon ${item.status}`}>
-        {evidenceIconMap[item.status]}
-      </span>
+      <span className={`evidence-icon ${item.status}`}>{evidenceIconMap[item.status]}</span>
       <span className="evidence-label">{item.label}</span>
       {item.detail ? <span className="evidence-detail">{item.detail}</span> : null}
     </li>

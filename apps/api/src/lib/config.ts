@@ -34,7 +34,7 @@ const envSchema = z.object({
   STELLAR_RPC_URL: z.string().url().default("https://soroban-testnet.stellar.org"),
   X402_FACILITATOR_URL: z.string().url().default("https://channels.openzeppelin.com/x402/testnet"),
   X402_FACILITATOR_API_KEY: z.string().optional(),
-  X402_PAY_TO_ADDRESS: z.string().min(10, "X402_PAY_TO_ADDRESS is required"),
+  X402_PAY_TO_ADDRESS: z.string().min(10, "X402_PAY_TO_ADDRESS is required").optional(),
   API_BASE_URL: z.string().url().default("http://localhost:3001"),
   CORS_ORIGINS: z.string().optional(),
   DEMO_CLIENT_SECRET_KEY: z.string().optional(),
@@ -78,44 +78,10 @@ export const config = {
   analyticsStorage: parsed.data.ANALYTICS_STORAGE
 };
 
-/**
- * A sanitized snapshot of the deployment configuration.
- * Contains only booleans and safe enum values — never secrets, private keys, or auth headers.
- */
-export interface ConfigSnapshot {
-  /** Stellar network identifier, e.g. "stellar:testnet" or "stellar:pubnet" */
-  network: string;
-  /** Whether the API is running in demo mode (no real payments) */
-  demoMode: boolean;
-  /** Whether an x402 facilitator URL is configured */
-  facilitatorConfigured: boolean;
-  /** Whether an x402 facilitator API key is configured (value never exposed) */
-  facilitatorApiKeyConfigured: boolean;
-  /** Whether a pay-to Stellar address is configured */
-  payToConfigured: boolean;
-  /** Whether sponsorship/subsidy mode is enabled */
-  sponsorshipEnabled: boolean;
-  /** Whether a sponsorship signing secret is configured (value never exposed) */
-  sponsorshipSigningSecretConfigured: boolean;
-  /** Whether at least one search/AI provider API key is configured (values never exposed) */
-  anyProviderKeyConfigured: boolean;
-}
-
-/**
- * Returns a sanitized snapshot of the current deployment configuration.
- * Safe to include in public health/diagnostics responses — no secrets are returned.
- */
-export function getConfigSnapshot(): ConfigSnapshot {
-  return {
-    network: config.STELLAR_NETWORK,
-    demoMode: config.demoMode,
-    facilitatorConfigured: Boolean(config.X402_FACILITATOR_URL),
-    facilitatorApiKeyConfigured: Boolean(config.X402_FACILITATOR_API_KEY),
-    payToConfigured: Boolean(config.X402_PAY_TO_ADDRESS),
-    sponsorshipEnabled: config.sponsorshipEnabled,
-    sponsorshipSigningSecretConfigured: Boolean(config.SPONSORSHIP_SIGNING_SECRET),
-    anyProviderKeyConfigured: Boolean(
-      config.BRAVE_API_KEY || config.SERPAPI_API_KEY || config.NEWS_API_KEY || config.GROQ_API_KEY
-    )
-  };
+export function getFacilitatorConfigured(): boolean {
+  return (
+    !!parsed.data.X402_FACILITATOR_URL &&
+    !!parsed.data.X402_FACILITATOR_API_KEY &&
+    parsed.data.X402_FACILITATOR_API_KEY.length > 0
+  );
 }

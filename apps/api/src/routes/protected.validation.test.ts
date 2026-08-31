@@ -5,9 +5,13 @@ import { applyApiTestEnv, resetApiTestStorage, TEST_WALLET } from "../test/api-t
 
 const executeQueryMock = vi.fn();
 
-vi.mock("../services/query-service.js", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args)
-}));
+vi.mock("../services/query-service.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../services/query-service.js")>();
+  return {
+    ...original,
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args)
+  };
+});
 
 vi.mock("../lib/persistence.js", () => ({
   persistPaymentAndUsage: vi.fn().mockResolvedValue(undefined),
@@ -33,12 +37,13 @@ function mockQueryResult(mode: string, providerId: string, priceUsd: number) {
   });
 }
 
-describe("protected route validation", () => {
+describe("protected route validation and error handling", () => {
   let analyticsDbPath: string;
   let sponsorshipDbPath: string;
 
   beforeEach(() => {
     ({ analyticsDbPath, sponsorshipDbPath } = applyApiTestEnv());
+    executeQueryMock.mockReset();
   });
 
   afterEach(async () => {
@@ -48,12 +53,43 @@ describe("protected route validation", () => {
 
   async function createValidationApp() {
     const { protectedRouter } = await import("../routes/protected.js");
+    const { UnsafeScrapeUrlError } = await import("../lib/scrape-url-safety.js");
+    const { PaymentEvidenceError } = await import("../lib/payment-evidence.js");
+    const { ProviderTimeoutError, ProviderFailedError } =
+      await import("../services/query-service.js");
     const app = express();
     app.use(protectedRouter);
+    app.use((error: any, _req: any, res: any, _next: any) => {
+      if (error instanceof UnsafeScrapeUrlError) {
+        return res
+          .status(400)
+          .json({ error: error.message, type: "unsafe_scrape_url", errorCode: "invalid_query" });
+      }
+      if (error instanceof PaymentEvidenceError) {
+        return res.status(400).json({
+          error: error.message,
+          type: "payment_evidence_error",
+          errorCode: "payment_invalid"
+        });
+      }
+      if (error instanceof ProviderTimeoutError) {
+        return res
+          .status(504)
+          .json({ error: error.message, type: "provider_timeout", errorCode: "provider_timeout" });
+      }
+      if (error instanceof ProviderFailedError) {
+        return res
+          .status(502)
+          .json({ error: error.message, type: "provider_failed", errorCode: "provider_failed" });
+      }
+      return res
+        .status(500)
+        .json({ error: error.message, type: "internal_error", errorCode: "internal_error" });
+    });
     return app;
   }
 
-  it("rejects invalid search query input", async () => {
+  it("rejects invalid search query input with invalid_query", async () => {
     const app = await createValidationApp();
 
     const missingQuery = await request(app).get("/x402/search").query({ provider: "search.basic" });
@@ -62,19 +98,21 @@ describe("protected route validation", () => {
       .query({ provider: "search.basic", q: "x" });
 
     expect(missingQuery.status).toBe(400);
+    expect(missingQuery.body.errorCode).toBe("invalid_query");
     expect(shortQuery.status).toBe(400);
+    expect(shortQuery.body.errorCode).toBe("invalid_query");
   });
 
-  it("rejects invalid news query input", async () => {
+  it("rejects invalid news query input with invalid_query", async () => {
     const app = await createValidationApp();
 
     const response = await request(app).get("/x402/news").query({ provider: "news.fast" });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toBeDefined();
+    expect(response.body.errorCode).toBe("invalid_query");
   });
 
-  it("rejects invalid scrape query input", async () => {
+  it("rejects invalid scrape query input with invalid_query", async () => {
     const app = await createValidationApp();
 
     const missingUrl = await request(app).get("/x402/scrape").query({ provider: "scrape.page" });
@@ -83,7 +121,35 @@ describe("protected route validation", () => {
       .query({ provider: "scrape.page", url: "not-a-url" });
 
     expect(missingUrl.status).toBe(400);
+    expect(missingUrl.body.errorCode).toBe("invalid_query");
     expect(invalidUrl.status).toBe(400);
+    expect(invalidUrl.body.errorCode).toBe("invalid_query");
+  });
+
+  it("handles provider timeout and returns provider_timeout", async () => {
+    const { ProviderTimeoutError } = await import("../services/query-service.js");
+    const app = await createValidationApp();
+    executeQueryMock.mockRejectedValueOnce(new ProviderTimeoutError("Request timed out"));
+
+    const response = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: "valid query" });
+
+    expect(response.status).toBe(504);
+    expect(response.body.errorCode).toBe("provider_timeout");
+  });
+
+  it("handles provider failure and returns provider_failed", async () => {
+    const { ProviderFailedError } = await import("../services/query-service.js");
+    const app = await createValidationApp();
+    executeQueryMock.mockRejectedValueOnce(new ProviderFailedError("Provider down"));
+
+    const response = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: "valid query" });
+
+    expect(response.status).toBe(502);
+    expect(response.body.errorCode).toBe("provider_failed");
   });
 });
 

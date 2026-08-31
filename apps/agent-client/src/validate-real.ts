@@ -86,17 +86,25 @@ async function main() {
   console.log("\n--- Facilitator Health ---");
   if (!config.X402_FACILITATOR_URL) {
     console.log(`Host: not configured`);
-    console.log(`Warning: X402_FACILITATOR_URL is not set. Set it in your .env file for real payment validation.`);
+    console.log(
+      `Warning: X402_FACILITATOR_URL is not set. Set it in your .env file for real payment validation.`
+    );
     console.log(`Probe attempted: no`);
     console.log(`Network: ${network}`);
     console.log(`Timestamp: ${probeTimestamp}`);
-    throw new Error("X402_FACILITATOR_URL is not configured. Real payment validation requires a facilitator URL.");
+    throw new Error(
+      "X402_FACILITATOR_URL is not configured. Real payment validation requires a facilitator URL."
+    );
   } else {
     console.log(`Host: ${facilitatorHost ?? "unparseable"}`);
     console.log(`Network: ${network}`);
     console.log("[probe] Checking facilitator /supported...");
     const healthResult = await checkFacilitator(config.X402_FACILITATOR_URL);
-    const reasonText = healthResult.ok ? undefined : typeof healthResult.body === "string" ? healthResult.body : JSON.stringify(healthResult.body);
+    const reasonText = healthResult.ok
+      ? undefined
+      : typeof healthResult.body === "string"
+        ? healthResult.body
+        : JSON.stringify(healthResult.body);
     console.log(`Probe attempted: yes`);
     console.log(`Status: ${healthResult.status === 0 ? "N/A" : healthResult.status}`);
     if (!healthResult.ok && reasonText) {
@@ -105,9 +113,7 @@ async function main() {
     console.log(`Timestamp: ${probeTimestamp}`);
 
     if (!healthResult.ok) {
-      throw new Error(
-        `Facilitator check failed (${healthResult.status}): ${reasonText}`
-      );
+      throw new Error(`Facilitator check failed (${healthResult.status}): ${reasonText}`);
     }
     console.log("[ok] Facilitator reachable and returned /supported response.");
   }
@@ -155,8 +161,9 @@ async function main() {
   });
 
   if (!result.ok) {
+    const errorCode = (result.body as any)?.errorCode ? ` [${(result.body as any).errorCode}]` : "";
     throw new Error(
-      `Paid request failed with status ${result.status}. Response: ${JSON.stringify(result.body)}`
+      `Paid request failed with status ${result.status}${errorCode}. Response: ${JSON.stringify(result.body)}`
     );
   }
 
@@ -170,6 +177,15 @@ async function main() {
   console.log(`Trace ID: ${(result.body as any)?.result?.traceId ?? "n/a"}`);
   console.log(`Provider: ${(result.body as any)?.result?.providerId ?? "n/a"}`);
   console.log(`Price: ${(result.body as any)?.result?.priceUsd ?? "n/a"}`);
+
+  if (result.proofLinks) {
+    console.log("\n--- Payment Proof Links ---");
+    console.log(`Transaction: ${result.proofLinks.transaction}`);
+    console.log(`Payer:       ${result.proofLinks.payer}`);
+    console.log(`Pay-to:      ${result.proofLinks.payTo}`);
+    console.log(`Network:     ${result.proofLinks.network}`);
+    console.log(`Asset:       ${result.proofLinks.asset}`);
+  }
 
   if (!paymentHeader) {
     throw new Error("No payment proof header found. Check facilitator/wallet settlement path.");

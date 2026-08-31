@@ -1,6 +1,10 @@
+import { z } from "zod";
+import { paidRouteErrorCodeSchema } from "./schemas.js";
+
 export type QueryMode = "search" | "news" | "scrape";
 export type ProviderCategory = QueryMode;
 export type SourceType = "live" | "deterministic-fallback" | "unavailable";
+export type Provenance = "mock" | "fallback" | "live" | "unknown";
 export type ExecutionFallbackReason =
   | "timeout"
   | "circuit-open"
@@ -10,8 +14,22 @@ export type ExecutionFallbackReason =
   | "missing-fallback";
 export type CircuitBreakerState = "closed" | "half-open" | "open";
 export type PaymentSource = "sponsored" | "wallet" | "demo";
+export type PaidRouteErrorCode = z.infer<typeof paidRouteErrorCodeSchema>;
 
 export type LatencyBucket = "<1s" | "1-3s" | "3-10s" | ">10s" | "unknown";
+
+export type LatencyBand = "fast" | "standard" | "slow";
+export type ReliabilityBand = "demo" | "fallback" | "live";
+export type PaymentMode = "demo" | "x402" | "sponsored";
+
+export interface SlaBadges {
+  latencyBand: LatencyBand;
+  latencyLabel: string;
+  reliabilityBand: ReliabilityBand;
+  reliabilityLabel: string;
+  paymentMode: PaymentMode;
+  paymentLabel: string;
+}
 
 export interface ProviderExecutionMetadata {
   providerId: string;
@@ -23,6 +41,17 @@ export interface ProviderExecutionMetadata {
   circuitBreakerState?: CircuitBreakerState;
 }
 
+export type LatencyBand = "fast" | "standard" | "slow" | "not-verified";
+export type ReliabilityBand = "live" | "fallback" | "demo" | "not-verified";
+export type PaymentModeBand = "x402" | "demo" | "sponsored" | "not-verified";
+
+export interface ProviderSlaBadge {
+  latencyBand: LatencyBand;
+  reliabilityBand: ReliabilityBand;
+  paymentMode: PaymentModeBand;
+  badgeCopy: string;
+}
+
 export interface ProviderDefinition {
   id: string;
   name: string;
@@ -32,7 +61,9 @@ export interface ProviderDefinition {
   latencyEstimateMs: number;
   qualityScore: number;
   sourceType: SourceType;
+  provenance: Provenance;
   enabled: boolean;
+  slaBadge: ProviderSlaBadge;
 }
 
 export interface ProviderResultItem {
@@ -146,6 +177,7 @@ export interface PaymentAttempt {
   policyDecision?: string;
   paymentSource?: PaymentSource;
   sponsorPublicKey?: string;
+  errorCode?: PaidRouteErrorCode;
 }
 
 export interface AnalyticsSummary {
@@ -176,81 +208,136 @@ export interface AnalyticsSummary {
   recentUsage: UsageEvent[];
 }
 
-export interface ProviderCapability {
+// Privacy-safe analytics types
+
+/**
+ * Aggregated metrics separated by demo and settlement status
+ */
+export interface SettlementMetrics {
+  count: number;
+  volumeUsd: number;
+}
+
+export interface CategoryMetrics {
+  search: SettlementMetrics;
+  news: SettlementMetrics;
+  scrape: SettlementMetrics;
+}
+
+/**
+ * Public analytics aggregation - privacy-safe, no raw queries/URLs/payer data
+ */
+export interface PrivacySafeAnalyticsAggregation {
+  /** Demo-paid queries without settlement */
+  demoPaid: {
+    totalCount: number;
+    totalVolumeUsd: number;
+    byCategory: CategoryMetrics;
+  };
+  /** Verified payments - on-chain record exists */
+  verified: {
+    totalCount: number;
+    totalVolumeUsd: number;
+    byCategory: CategoryMetrics;
+  };
+  /** Settled payments - fully confirmed on-chain */
+  settled: {
+    totalCount: number;
+    totalVolumeUsd: number;
+    byCategory: CategoryMetrics;
+  };
+  /** Failed payment attempts */
+  failed: {
+    totalCount: number;
+    totalVolumeUsd: number;
+    byCategory: CategoryMetrics;
+  };
+}
+
+/**
+ * Redacted usage record for public analytics endpoints
+ * No raw query text, URLs, or full payer addresses
+ */
+export interface PrivacySafeUsageRecord {
   id: string;
-  name: string;
-  category: ProviderCategory;
+  mode: QueryMode;
+  endpoint: string;
+  providerId: string;
   priceUsd: number;
-  sourceType: SourceType;
-  latencyEstimateMs: number;
-  enabled: boolean;
-  hasFallback: boolean;
-  caveat: string | null;
+  paymentStatus: "demo-paid" | "paid" | "failed";
+  createdAt: string;
+  latencyMs: number;
+  traceId: string;
+  /** Hashed payer identifier (redacted in public endpoint) */
+  payerHash?: string;
 }
 
-export interface SponsorshipGrant {
-  grantId: string;
-  wallet: string;
-  network: string;
-  mode?: QueryMode;
-  providerId?: string;
-  maxAmountUsd: number;
-  expiresAt: string;
-  nonce: string;
-  issuedAt: string;
+/**
+ * Cursor-based pagination parameters
+ */
+export interface CursorPaginationParams {
+  cursor?: string;
+  limit: number;
 }
 
-export interface SignedGrant {
-  grant: SponsorshipGrant;
-  signature: string;
+export interface PaginatedAnalyticsResponse {
+  success: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
+  data: PrivacySafeAnalyticsRecord[];
 }
 
-export interface SponsorshipChallenge {
-  challengeId: string;
-  wallet: string;
-  message: string;
-  expiresAt: string;
+export interface PrivacySafeAnalyticsRecord {
+  id: string;
+  timestamp: string;
+  payerAddress: string;
+  volumeType: 'demo' | 'settled';
+  amount: number;
+  asset: string;
 }
 
-export interface SponsorshipPreviewBudget {
-  limitUsd: number;
-  spentUsd: number;
-  remainingUsd: number;
-  windowStart: string;
+export interface PaginatedAnalyticsResponse {
+  success: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
+  data: PrivacySafeAnalyticsRecord[];
 }
 
-export interface SponsorshipPreviewRestrictions {
-  mode: QueryMode | null;
-  providerId: string | null;
-}
-
-export interface SponsorshipPreviewGrant {
-  maxAmountUsd: number;
-  ttlSeconds: number;
-  expiresInSeconds: number;
-  restrictions: SponsorshipPreviewRestrictions;
-}
-
-export interface SponsorshipPreview {
-  sponsorshipEnabled: boolean;
-  storageAvailable: boolean;
-  available: boolean;
-  decision: string;
-  network: string;
-  wallet: string;
+/**
+ * Detailed analytics for authorized access
+ * Still redacts sensitive fields but includes more data
+ */
+export interface DetailedAnalyticsRecord {
+  id: string;
   mode: QueryMode;
-  provider: string;
-  providerName: string;
-  grant: SponsorshipPreviewGrant;
-  quotedPriceUsd: number;
-  priceFitsGrant: boolean;
-  perWalletBudget: SponsorshipPreviewBudget;
-  globalBudget: SponsorshipPreviewBudget;
-  reason?: string;
+  endpoint: string;
+  providerId: string;
+  priceUsd: number;
+  paymentStatus: "demo-paid" | "paid" | "failed";
+  paymentTxHash?: string;
+  payerKeyHash?: string;
+  createdAt: string;
+  latencyMs: number;
+  traceId: string;
 }
 
-export interface SponsorshipPreviewRequest {
-  wallet: string;
-  mode: QueryMode;
-  provider: string;
+/**
+ * Detailed analytics response for private/authorized endpoints
+ */
+export interface DetailedAnalyticsResponse {
+  aggregation: PrivacySafeAnalyticsAggregation;
+  records: DetailedAnalyticsRecord[];
+  pagination: CursorPaginationMeta;
+}
+
+/**
+ * Analytics configuration
+ */
+export interface AnalyticsConfig {
+  /** Retention days for sensitive fields (queryOrUrl, payerPublicKey) */
+  retentionDays: number;
+  /** Maximum records per page */
+  maxPageLimit: number;
+  /** Default page limit */
+  defaultPageLimit: number;
 }

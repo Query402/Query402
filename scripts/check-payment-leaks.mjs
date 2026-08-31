@@ -45,7 +45,8 @@ function findLeaks(content) {
     }
 
     // 4. Facilitator API Key
-    const facilitatorKeyRegex = /(?:facilitator.*api.*key|x402.*facilitator.*api.*key)\s*[:=]\s*["']?([a-zA-Z0-9_\-]+)["']?/gi;
+    const facilitatorKeyRegex =
+      /(?:facilitator.*api.*key|x402.*facilitator.*api.*key)\s*[:=]\s*["']?([a-zA-Z0-9_\-]+)["']?/gi;
     while ((match = facilitatorKeyRegex.exec(line)) !== null) {
       const val = match[1];
       const isRedacted =
@@ -61,7 +62,8 @@ function findLeaks(content) {
     }
 
     // 5. X-Payment Header or payment-response header
-    const paymentHeaderRegex = /(?:x-payment|payment-response|x-payment-response)\s*[:=]\s*["']?([a-zA-Z0-9_\-\[\]\+\/=]+)["']?/gi;
+    const paymentHeaderRegex =
+      /(?:x-payment|payment-response|x-payment-response)\s*[:=]\s*["']?([a-zA-Z0-9_\-\[\]\+\/=]+)["']?/gi;
     while ((match = paymentHeaderRegex.exec(line)) !== null) {
       const val = match[1];
       const isRedacted =
@@ -71,7 +73,9 @@ function findLeaks(content) {
         val.endsWith("]") ||
         val.startsWith("demo_tx_") ||
         val.startsWith("demo-proof-") ||
-        ["none", "<none>", "tx_test", "proof_123", "demo-proof-news", "demo-proof-scrape"].includes(val.toLowerCase());
+        ["none", "<none>", "tx_test", "proof_123", "demo-proof-news", "demo-proof-scrape"].includes(
+          val.toLowerCase()
+        );
       if (!isRedacted) {
         leaks.push({ lineNum, pattern: "X-Payment Header", match: val });
       }
@@ -150,12 +154,17 @@ function runSelfTest() {
   for (const fail of failingCases) {
     const leaks = findLeaks(fail.text);
     if (leaks.length === 0) {
-      console.error(`Self-test failed: Expected leak for pattern "${fail.pattern}" in "${fail.text}", but none found.`);
+      console.error(
+        `Self-test failed: Expected leak for pattern "${fail.pattern}" in "${fail.text}", but none found.`
+      );
       process.exit(1);
     }
     const hasPattern = leaks.some((l) => l.pattern === fail.pattern);
     if (!hasPattern) {
-      console.error(`Self-test failed: Expected leak of type "${fail.pattern}" in "${fail.text}", but found different type:`, leaks);
+      console.error(
+        `Self-test failed: Expected leak of type "${fail.pattern}" in "${fail.text}", but found different type:`,
+        leaks
+      );
       process.exit(1);
     }
   }

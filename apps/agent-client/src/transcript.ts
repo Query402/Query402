@@ -37,9 +37,7 @@ const OUT_DIR = path.resolve(__dirname, "../../../transcript");
 // Guard: refuse to run outside DEMO_MODE
 // ---------------------------------------------------------------------------
 if (config.DEMO_MODE !== "true") {
-  console.error(
-    "ERROR: Set DEMO_MODE=true to generate a transcript without live credentials."
-  );
+  console.error("ERROR: Set DEMO_MODE=true to generate a transcript without live credentials.");
   process.exit(1);
 }
 
@@ -49,10 +47,10 @@ const API_BASE = config.API_BASE_URL.replace(/\/$/, "");
 // Secret redaction
 // ---------------------------------------------------------------------------
 const SECRET_PATTERNS: RegExp[] = [
-  /S[A-Z0-9]{55}/g,        // Stellar secret key (starts with S, 56 chars)
-  /Bearer\s+\S+/gi,        // Bearer tokens
-  /x-payment:\s*\S+/gi,    // raw payment header value
-  /X402-Payment:\s*\S+/gi,
+  /S[A-Z0-9]{55}/g,
+  /Bearer\s+\S+/gi,
+  /x-payment:\s*\S+/gi,
+  /X402-Payment:\s*\S+/gi
 ];
 const REDACTED = "[REDACTED]";
 
@@ -61,7 +59,7 @@ const SENSITIVE_HEADER_KEYS = new Set([
   "x402-payment",
   "authorization",
   "x-api-key",
-  "payment-response",      // raw tx ID; replaced with presence flag below
+  "payment-response"
 ]);
 
 const SENSITIVE_OBJ_KEYS = new Set([
@@ -71,7 +69,7 @@ const SENSITIVE_OBJ_KEYS = new Set([
   "private_key",
   "privatekey",
   "api_key",
-  "apikey",
+  "apikey"
 ]);
 
 function redact(value: unknown): unknown {
@@ -117,15 +115,21 @@ interface RawResult {
 
 function httpGet(url: string): Promise<RawResult> {
   return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
-      let raw = "";
-      res.on("data", (chunk: Buffer) => (raw += chunk.toString()));
-      res.on("end", () => {
-        let body: unknown;
-        try { body = JSON.parse(raw); } catch { body = raw; }
-        resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
-      });
-    }).on("error", reject);
+    http
+      .get(url, (res) => {
+        let raw = "";
+        res.on("data", (chunk: Buffer) => (raw += chunk.toString()));
+        res.on("end", () => {
+          let body: unknown;
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            body = raw;
+          }
+          resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+        });
+      })
+      .on("error", reject);
   });
 }
 
@@ -167,9 +171,7 @@ async function step1Health(): Promise<Step> {
       responseHeaders: safeHeaders(r.headers),
       body: redact(r.body),
       note:
-        r.status === 200
-          ? "API is healthy and ready."
-          : "API responded but may not be fully ready.",
+        r.status === 200 ? "API is healthy and ready." : "API responded but may not be fully ready."
     };
   } catch (err) {
     return {
@@ -177,7 +179,7 @@ async function step1Health(): Promise<Step> {
       timestamp,
       status: "n/a",
       error: `Could not reach ${API_BASE}/health — is the API running? (${err})`,
-      note: "Transcript is still written for CI evidence purposes.",
+      note: "Transcript is still written for CI evidence purposes."
     };
   }
 }
@@ -192,14 +194,14 @@ async function step2Catalog(): Promise<Step> {
       status: r.status,
       responseHeaders: safeHeaders(r.headers),
       body: redact(r.body),
-      note: "Available search/news/scrape providers with per-request pricing.",
+      note: "Available search/news/scrape providers with per-request pricing."
     };
   } catch (err) {
     return {
       step: "2_provider_catalog",
       timestamp,
       status: "n/a",
-      error: String(err),
+      error: String(err)
     };
   }
 }
@@ -210,9 +212,17 @@ async function step2Catalog(): Promise<Step> {
  */
 async function step3PaidQueries(): Promise<Step[]> {
   const queries: Array<Parameters<typeof runPaidQuery>[0]> = [
-    { mode: "search",  provider: "search.pro",    query: "latest stellar x402 updates" },
-    { mode: "news",    provider: "news.deep",      query: "stablecoin micropayments" },
-    { mode: "scrape",  provider: "scrape.extract", url: "https://developers.stellar.org" },
+    {
+      mode: "search",
+      provider: "search.pro",
+      query: "latest stellar x402 updates"
+    },
+    { mode: "news", provider: "news.deep", query: "stablecoin micropayments" },
+    {
+      mode: "scrape",
+      provider: "scrape.extract",
+      url: "https://developers.stellar.org"
+    }
   ];
 
   const steps: Step[] = [];
@@ -220,29 +230,28 @@ async function step3PaidQueries(): Promise<Step[]> {
   for (let i = 0; i < queries.length; i++) {
     const q = queries[i];
     const timestamp = new Date().toISOString();
-    const label = `3${String.fromCharCode(97 + i)}_demo_paid_${q.mode}`; // 3a_, 3b_, 3c_
+    const label = `3${String.fromCharCode(97 + i)}_demo_paid_${q.mode}`;
 
     try {
       const response = await runPaidQuery(q);
       const payload = response.body as Record<string, unknown> | undefined;
-      const result  = payload?.result as Record<string, unknown> | undefined;
+      const result = payload?.result as Record<string, unknown> | undefined;
 
       steps.push({
         step: label,
         timestamp,
         status: response.status,
         body: redact({
-          provider:                q.provider,
-          endpoint:                response.endpoint,
-          // Never write the raw payment-response header value; record presence only
+          provider: q.provider,
+          endpoint: response.endpoint,
           payment_response_present: Boolean(response.paymentResponse),
-          price_usd:               result?.priceUsd ?? "n/a",
-          items_returned:          Array.isArray(result?.items) ? result.items.length : 0,
-          result_body:             payload,
+          price_usd: result?.priceUsd ?? "n/a",
+          items_returned: Array.isArray(result?.items) ? result.items.length : 0,
+          result_body: payload
         }),
         note:
           "DEMO_MODE=true — payment header contains a placeholder tx ID; " +
-          "no real Stellar transaction is submitted or settled.",
+          "no real Stellar transaction is submitted or settled."
       });
     } catch (err) {
       steps.push({ step: label, timestamp, status: "n/a", error: String(err) });
@@ -254,21 +263,21 @@ async function step3PaidQueries(): Promise<Step[]> {
 
 function step4Metadata(paidSteps: Step[]): Step {
   const first = paidSteps.find((s) => s.status !== "n/a");
-  const body  = first?.body as Record<string, unknown> | undefined;
+  const body = first?.body as Record<string, unknown> | undefined;
   return {
     step: "4_response_metadata",
     timestamp: new Date().toISOString(),
     status: "n/a",
     body: {
-      provider:           body?.provider ?? "search.pro",
-      price_usd:          body?.price_usd ?? "n/a",
+      provider: body?.provider ?? "search.pro",
+      price_usd: body?.price_usd ?? "n/a",
       settlement_network: "stellar:testnet",
-      payment_status:     "DEMO — no real Stellar settlement",
+      payment_status: "DEMO — no real Stellar settlement",
       note:
         "In production this section contains the facilitator-signed " +
-        "payment-response header. Here it is intentionally omitted.",
+        "payment-response header. Here it is intentionally omitted."
     },
-    note: "Synthesised from paid-query responses. No secrets included.",
+    note: "Synthesised from paid-query responses. No secrets included."
   };
 }
 
@@ -282,14 +291,14 @@ async function step5Analytics(): Promise<Step> {
       status: r.status,
       responseHeaders: safeHeaders(r.headers),
       body: redact(r.body),
-      note: "Total spend + per-category breakdown stored in SQLite.",
+      note: "Total spend + per-category breakdown stored in SQLite."
     };
   } catch (err) {
     return {
       step: "5_analytics_summary",
       timestamp,
       status: "n/a",
-      error: String(err),
+      error: String(err)
     };
   }
 }
@@ -308,7 +317,7 @@ function assemble(steps: Step[]): Transcript {
       "Generated in DEMO_MODE. No real Stellar credentials or live payments " +
       "were used. All secret fields are redacted. " +
       "Safe to attach to Drips/SCF updates and investor notes.",
-    steps,
+    steps
   };
 }
 
@@ -323,13 +332,13 @@ function toText(t: Transcript): string {
     `  Network   : ${t.settlement_network}`,
     `  ⚠  ${t.warning}`,
     bar,
-    "",
+    ""
   ];
   for (const s of t.steps) {
     lines.push(`▶ ${s.step}`);
     lines.push(`  Timestamp : ${s.timestamp}`);
     lines.push(`  Status    : ${s.status}`);
-    if (s.note)  lines.push(`  Note      : ${s.note}`);
+    if (s.note) lines.push(`  Note      : ${s.note}`);
     if (s.error) lines.push(`  ERROR     : ${s.error}`);
     if (s.body) {
       lines.push("  Body:");
@@ -348,10 +357,10 @@ function writeArtifact(t: Transcript): { json: string; txt: string } {
 
   const slug = t.generated_at.replace(/[:.]/g, "-").replace("T", "_");
   const jsonPath = path.join(OUT_DIR, `demo-transcript-${slug}.json`);
-  const txtPath  = path.join(OUT_DIR, `demo-transcript-${slug}.txt`);
+  const txtPath = path.join(OUT_DIR, `demo-transcript-${slug}.txt`);
 
   fs.writeFileSync(jsonPath, JSON.stringify(t, null, 2), "utf8");
-  fs.writeFileSync(txtPath,  toText(t),                  "utf8");
+  fs.writeFileSync(txtPath, toText(t), "utf8");
   return { json: jsonPath, txt: txtPath };
 }
 
@@ -389,7 +398,8 @@ async function main(): Promise<void> {
   console.log(`   JSON : ${json}`);
   console.log(`   TXT  : ${txt}`);
   console.log("");
-  console.log("   Label   : DEMO_MODE  (safe for SCF / Drips / investor notes)");
+  const note = "   Label   : DEMO_MODE  (safe for SCF / Drips / investor notes)";
+  console.log(note);
   console.log("   Secrets : all redacted");
   console.log("   Payment : no real Stellar transaction");
 }

@@ -8,7 +8,8 @@ vi.mock("./config.js", () => ({
     X402_PAY_TO_ADDRESS: "GA-test-address",
     X402_FACILITATOR_URL: "https://test.facilitator.url",
     DEMO_CLIENT_PUBLIC_KEY: "GA-demo-key"
-  }
+  },
+  requirePayToAddress: () => "GA-test-address"
 }));
 
 describe("persistPaidRequest price outlier detection", () => {

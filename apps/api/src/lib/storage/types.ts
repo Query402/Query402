@@ -1,4 +1,9 @@
-import type { AnalyticsSummary, PaymentAttempt, UsageEvent } from "@query402/shared";
+import type {
+  AnalyticsSummary,
+  PaymentAttempt,
+  UsageEvent,
+  SettlementDigest
+} from "@query402/shared";
 
 export interface PaginationOptions {
   limit?: number;
@@ -39,6 +44,7 @@ export interface StorageRepository {
   getUsageEvents(options?: PaginationOptions): Promise<UsageEvent[]>;
   getPaymentAttempts(options?: PaginationOptions): Promise<PaymentAttempt[]>;
   getAnalyticsSummary(options?: AnalyticsQueryOptions): Promise<AnalyticsSummary>;
+  getSettlementDigest(): Promise<SettlementDigest>;
 
   acquireIdempotencyLock(
     key: string,

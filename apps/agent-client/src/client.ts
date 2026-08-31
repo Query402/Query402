@@ -2,6 +2,8 @@ import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { createEd25519Signer } from "@x402/stellar";
 import { ExactStellarScheme } from "@x402/stellar/exact/client";
+import { buildPaymentProofLinks } from "@query402/shared";
+import type { PaymentProofLinks } from "@query402/shared";
 import { nanoid } from "nanoid";
 import { config } from "./config.js";
 import { buildPaidClientRequestKey, getIdempotencyKey } from "./idempotency.js";
@@ -102,13 +104,39 @@ export async function runPaidQuery(input: {
   }
 
   const json = await response.json();
+  if (!response.ok || response.status === 402) {
+    if (json && typeof json === "object" && !json.errorCode) {
+      json.errorCode = response.status === 402 ? "payment_required" : "internal_error";
+    }
+  }
+
+  const evidence = json?.payment?.evidence as
+    | {
+        transactionHash?: string;
+        payer?: string;
+        payTo?: string;
+        network?: string;
+        asset?: string;
+      }
+    | undefined;
+
+  const proofLinks: PaymentProofLinks | undefined = evidence
+    ? buildPaymentProofLinks({
+        transactionHash: evidence.transactionHash,
+        payerPublicKey: evidence.payer,
+        payToAddress: evidence.payTo,
+        network: evidence.network,
+        asset: evidence.asset ?? undefined
+      })
+    : undefined;
 
   return {
     endpoint,
     status: response.status,
     ok: response.ok,
     paymentResponse: response.headers.get("payment-response"),
-    isDemoMode,
-    body: json
+    id: newNode.id,
+    body: json,
+    proofLinks
   };
-}
+
