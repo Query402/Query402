@@ -468,6 +468,23 @@ describe("x402 payment header presence validation - non-demo routes", () => {
 
   for (const routeCase of protectedRoutes) {
     describe(`GET ${routeCase.path}`, () => {
+      it("rejects payment headers above the documented size limit before parsing", async () => {
+        const { MAX_PAYMENT_HEADER_LENGTH } = await import("../lib/x402.js");
+        const app = await createHeaderValidationApp();
+        const response = await request(app)
+          .get(routeCase.path)
+          .query(routeCase.query)
+          .set("x-payment", "a".repeat(MAX_PAYMENT_HEADER_LENGTH + 1));
+
+        expect(response.status).toBe(413);
+        expect(response.body).toEqual({
+          error: "Payment header exceeds the maximum allowed length",
+          type: "payment_header_too_large",
+          errorCode: "payment_header_too_large",
+          maxLength: MAX_PAYMENT_HEADER_LENGTH
+        });
+      });
+
       it("returns no_payment_header when all payment headers are absent", async () => {
         const app = await createHeaderValidationApp();
         const response = await request(app).get(routeCase.path).query(routeCase.query);
