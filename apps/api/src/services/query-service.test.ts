@@ -74,3 +74,61 @@ describe("executeQuery", () => {
     expect(serializedPayload).not.toContain("wallet_secret");
   });
 });
+
+describe("getCatalog deterministic ordering", () => {
+  it("returns providers sorted by category, then price, then id", async () => {
+    const { getCatalog } = await import("./query-service.js");
+    const catalog = getCatalog();
+
+    const sorted = catalog.providers;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const current = sorted[i];
+      const next = sorted[i + 1];
+
+      if (current.category !== next.category) {
+        expect(current.category.localeCompare(next.category)).toBeLessThan(0);
+      } else if (current.priceUsd !== next.priceUsd) {
+        expect(current.priceUsd).toBeLessThan(next.priceUsd);
+      } else {
+        expect(current.id.localeCompare(next.id)).toBeLessThan(0);
+      }
+    }
+  });
+
+  it("sorts each category grouping deterministically", async () => {
+    const { getCatalog } = await import("./query-service.js");
+    const catalog = getCatalog();
+
+    for (const category of ["search", "news", "scrape"] as const) {
+      const group = catalog.byCategory[category];
+      for (let i = 0; i < group.length - 1; i++) {
+        const current = group[i];
+        const next = group[i + 1];
+
+        if (current.priceUsd !== next.priceUsd) {
+          expect(current.priceUsd).toBeLessThan(next.priceUsd);
+        } else {
+          expect(current.id.localeCompare(next.id)).toBeLessThan(0);
+        }
+      }
+    }
+  });
+
+  it("does not mutate the stored catalog array", async () => {
+    const { getCatalog } = await import("./query-service.js");
+    const { providers } = await import("../lib/pricing.js");
+
+    const originalOrder = providers.map((p) => p.id);
+    getCatalog();
+
+    expect(providers.map((p) => p.id)).toEqual(originalOrder);
+  });
+
+  it("returns a copy, not the stored array reference", async () => {
+    const { getCatalog } = await import("./query-service.js");
+    const { providers } = await import("../lib/pricing.js");
+
+    const catalog = getCatalog();
+    expect(catalog.providers).not.toBe(providers);
+  });
+});
