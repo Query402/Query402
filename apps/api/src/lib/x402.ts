@@ -43,6 +43,16 @@ const basePriceByMode: Record<RouteMode, string> = {
 
 const PAYMENT_HEADER_CANDIDATES = ["payment", "payment-signature", "x-payment"] as const;
 
+/** Maximum encoded payment header size accepted before x402 parsing begins. */
+export const MAX_PAYMENT_HEADER_LENGTH = 8_192;
+
+export const paymentHeaderTooLargePayload = {
+  error: "Payment header exceeds the maximum allowed length",
+  type: "payment_header_too_large",
+  errorCode: "payment_header_too_large",
+  maxLength: MAX_PAYMENT_HEADER_LENGTH
+};
+
 function isProtectedX402Route(path: string): boolean {
   return path === "/x402/search" || path === "/x402/news" || path === "/x402/scrape";
 }
@@ -421,6 +431,10 @@ export function createX402Middleware() {
           errorCode: "invalid_payment_header",
           debug
         });
+      }
+
+      if (rawHeader.length > MAX_PAYMENT_HEADER_LENGTH) {
+        return res.status(413).json(paymentHeaderTooLargePayload);
       }
     }
 
