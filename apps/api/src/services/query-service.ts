@@ -1,7 +1,7 @@
 import { getProviderById, providers, validateProviderCatalog } from "../lib/pricing.js";
 import { registry } from "../providers/index.js";
 import { nanoid } from "nanoid";
-import { QueryResult } from "@query402/shared";
+import { ProviderDefinition, QueryResult } from "@query402/shared";
 import { validateScrapeUrl } from "../lib/scrape-url-safety.js";
 import { logger } from "../lib/logger.js";
 
@@ -109,18 +109,29 @@ export async function executeQuery(params: {
 
 export function getCatalog() {
   validateProviderCatalog();
+  const sortedProviders = [...providers].sort(compareProviders);
   const byCategory = {
-    search: providers.filter((provider) => provider.category === "search"),
-    news: providers.filter((provider) => provider.category === "news"),
-    scrape: providers.filter((provider) => provider.category === "scrape")
+    search: sortedProviders.filter((provider) => provider.category === "search"),
+    news: sortedProviders.filter((provider) => provider.category === "news"),
+    scrape: sortedProviders.filter((provider) => provider.category === "scrape")
   };
 
   return {
     updatedAt: new Date().toISOString(),
     providerCount: providers.length,
-    providers,
+    providers: sortedProviders,
     byCategory
   };
+}
+
+function compareProviders(a: ProviderDefinition, b: ProviderDefinition): number {
+  const categoryCompare = a.category.localeCompare(b.category);
+  if (categoryCompare !== 0) return categoryCompare;
+
+  const priceCompare = a.priceUsd - b.priceUsd;
+  if (priceCompare !== 0) return priceCompare;
+
+  return a.id.localeCompare(b.id);
 }
 
 import { getUsageEvents } from "../lib/persistence.js";
