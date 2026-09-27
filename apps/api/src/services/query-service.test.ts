@@ -74,3 +74,67 @@ describe("executeQuery", () => {
     expect(serializedPayload).not.toContain("wallet_secret");
   });
 });
+
+describe("getCatalog deterministic ordering", () => {
+  it("returns providers in the shared canonical order", async () => {
+    const [{ getCatalog }, { compareProviders, providers, sortProviderCatalog }] =
+      await Promise.all([import("./query-service.js"), import("../lib/pricing.js")]);
+
+    const catalog = getCatalog();
+
+    expect(catalog.providers.map((provider) => provider.id)).toEqual(
+      sortProviderCatalog(providers).map((provider) => provider.id)
+    );
+    for (let i = 1; i < catalog.providers.length; i++) {
+      expect(
+        compareProviders(catalog.providers[i - 1], catalog.providers[i])
+      ).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it("sorts every byCategory grouping with the same canonical order", async () => {
+    const [{ getCatalog }, { compareProviders }] = await Promise.all([
+      import("./query-service.js"),
+      import("../lib/pricing.js")
+    ]);
+
+    const catalog = getCatalog();
+
+    for (const category of ["search", "news", "scrape"] as const) {
+      const group = catalog.byCategory[category];
+      expect(group.length).toBeGreaterThan(0);
+      expect(group.every((provider) => provider.category === category)).toBe(true);
+      for (let i = 1; i < group.length; i++) {
+        expect(compareProviders(group[i - 1], group[i])).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
+  it("does not mutate the stored catalog array or its order", async () => {
+    const [{ getCatalog }, { providers }] = await Promise.all([
+      import("./query-service.js"),
+      import("../lib/pricing.js")
+    ]);
+
+    const originalIds = providers.map((provider) => provider.id);
+    getCatalog();
+
+    expect(providers.map((provider) => provider.id)).toEqual(originalIds);
+  });
+
+  it("returns a sorted copy rather than the stored array reference", async () => {
+    const [{ getCatalog }, { providers }] = await Promise.all([
+      import("./query-service.js"),
+      import("../lib/pricing.js")
+    ]);
+
+    const originalIds = providers.map((provider) => provider.id);
+    const catalog = getCatalog();
+
+    expect(catalog.providers).not.toBe(providers);
+
+    // Mutating the response must not be able to reshape the stored catalog.
+    catalog.providers.length = 0;
+    expect(providers.map((provider) => provider.id)).toEqual(originalIds);
+  });
+});

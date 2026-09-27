@@ -254,17 +254,48 @@ export function getProvidersByCategory(category: ProviderDefinition["category"])
   return providers.filter((provider) => provider.category === category && provider.enabled);
 }
 
+type ProviderOrderingKey = Pick<ProviderDefinition, "category" | "priceUsd" | "id">;
+
+/**
+ * Locale-independent string comparison. `localeCompare` can order the same two
+ * ids differently depending on the host ICU data, so catalog ordering uses raw
+ * code-point comparison to stay reproducible across environments.
+ */
+function compareStrings(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/**
+ * Canonical ordering for every provider catalog projection. This is a total
+ * order over documented provider fields, applied in priority order:
+ *
+ * 1. `category`  - ascending (news, scrape, search)
+ * 2. `priceUsd`  - ascending (cheapest first)
+ * 3. `id`        - ascending; ids are unique (enforced by
+ *    `validateProviderCatalog`), so no two providers can tie and the order
+ *    never depends on insertion order or the host locale.
+ */
+export function compareProviders(a: ProviderOrderingKey, b: ProviderOrderingKey): number {
+  const categoryCompare = compareStrings(a.category, b.category);
+  if (categoryCompare !== 0) return categoryCompare;
+
+  const priceCompare = a.priceUsd - b.priceUsd;
+  if (priceCompare !== 0) return priceCompare;
+
+  return compareStrings(a.id, b.id);
+}
+
+/**
+ * Returns a new array ordered by {@link compareProviders}. The input is never
+ * mutated, so catalog responses cannot reorder (or leak references into) the
+ * stored catalog array.
+ */
+export function sortProviderCatalog<T extends ProviderOrderingKey>(catalog: readonly T[]): T[] {
+  return [...catalog].sort(compareProviders);
+}
+
 export function getSortedProviders(): ProviderDefinition[] {
   validateProviderCatalog();
-  return [...providers]
-    .filter((provider) => provider.enabled)
-    .sort((a, b) => {
-      const categoryCompare = a.category.localeCompare(b.category);
-      if (categoryCompare !== 0) return categoryCompare;
-
-      const priceCompare = a.priceUsd - b.priceUsd;
-      if (priceCompare !== 0) return priceCompare;
-
-      return a.id.localeCompare(b.id);
-    });
+  return sortProviderCatalog(providers.filter((provider) => provider.enabled));
 }

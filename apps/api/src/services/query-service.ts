@@ -1,4 +1,9 @@
-import { getProviderById, providers, validateProviderCatalog } from "../lib/pricing.js";
+import {
+  getProviderById,
+  providers,
+  sortProviderCatalog,
+  validateProviderCatalog
+} from "../lib/pricing.js";
 import { registry } from "../providers/index.js";
 import { nanoid } from "nanoid";
 import { QueryResult } from "@query402/shared";
@@ -109,16 +114,19 @@ export async function executeQuery(params: {
 
 export function getCatalog() {
   validateProviderCatalog();
+  // Order a copy so the stored catalog array is never mutated in place and
+  // every catalog response is stable regardless of insertion order.
+  const sortedProviders = sortProviderCatalog(providers);
   const byCategory = {
-    search: providers.filter((provider) => provider.category === "search"),
-    news: providers.filter((provider) => provider.category === "news"),
-    scrape: providers.filter((provider) => provider.category === "scrape")
+    search: sortedProviders.filter((provider) => provider.category === "search"),
+    news: sortedProviders.filter((provider) => provider.category === "news"),
+    scrape: sortedProviders.filter((provider) => provider.category === "scrape")
   };
 
   return {
     updatedAt: new Date().toISOString(),
     providerCount: providers.length,
-    providers,
+    providers: sortedProviders,
     byCategory
   };
 }

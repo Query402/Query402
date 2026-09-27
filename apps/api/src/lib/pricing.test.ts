@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCapabilityMatrix,
+  compareProviders,
   computeSlaBadge,
   getProviderById,
   getProvidersByCategory,
@@ -8,6 +9,7 @@ import {
   ProviderCatalogConflictError,
   protectedRouteBasePrices,
   providers,
+  sortProviderCatalog,
   validateProviderCatalog
 } from "./pricing.js";
 import { applySponsorshipTestEnv } from "../test/sponsorship-test-helpers.js";
@@ -534,5 +536,96 @@ describe("SLA badge computation", () => {
       expect(provider.slaBadge).toBeDefined();
       expect(provider.slaBadge.badgeCopy).toBeTruthy();
     }
+  });
+});
+
+describe("deterministic provider catalog ordering", () => {
+  // Fixture rows are declared in a deliberately non-canonical order and then
+  // run through many permutations below, so the assertions fail if ordering
+  // ever depends on the array's input order.
+  const fixture = [
+    { category: "scrape", priceUsd: 0.02, id: "scrape.page" },
+    { category: "search", priceUsd: 0.02, id: "search.pro" },
+    { category: "news", priceUsd: 0.015, id: "news.fast" },
+    { category: "search", priceUsd: 0.01, id: "search.basic" },
+    { category: "scrape", priceUsd: 0.04, id: "scrape.extract" },
+    { category: "news", priceUsd: 0.03, id: "news.deep" },
+    { category: "search", priceUsd: 0.02, id: "search.alt" }
+  ] as const;
+
+  // category asc, then price asc, then id asc. "search.alt" and "search.pro"
+  // share a category and price, so the unique id is the final tie-break.
+  const expectedOrder = [
+    "news.fast",
+    "news.deep",
+    "scrape.page",
+    "scrape.extract",
+    "search.basic",
+    "search.alt",
+    "search.pro"
+  ];
+
+  function seededShuffle<T>(input: readonly T[], seed: number): T[] {
+    const out = [...input];
+    let state = seed >>> 0;
+    for (let i = out.length - 1; i > 0; i--) {
+      // xorshift32 keeps the permutation deterministic for a given seed.
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      const j = (state >>> 0) % (i + 1);
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  const permutations: Array<readonly (typeof fixture)[number][]> = [
+    fixture,
+    [...fixture].reverse(),
+    [...fixture.slice(3), ...fixture.slice(0, 3)],
+    ...Array.from({ length: 12 }, (_, i) => seededShuffle(fixture, i + 1))
+  ];
+
+  it("returns the same canonical order for every input permutation", () => {
+    for (const permutation of permutations) {
+      expect(sortProviderCatalog(permutation).map((row) => row.id)).toEqual(expectedOrder);
+    }
+  });
+
+  it("does not mutate the input array", () => {
+    const input = [...fixture];
+    const before = input.map((row) => row.id);
+
+    sortProviderCatalog(input);
+
+    expect(input.map((row) => row.id)).toEqual(before);
+  });
+
+  it("is a total order: unique ids break every category and price tie", () => {
+    const sorted = sortProviderCatalog(fixture);
+
+    for (let i = 1; i < sorted.length; i++) {
+      expect(compareProviders(sorted[i - 1], sorted[i])).toBeLessThan(0);
+      expect(compareProviders(sorted[i], sorted[i - 1])).toBeGreaterThan(0);
+    }
+  });
+
+  it("applies the canonical comparator to the live catalog", () => {
+    const sorted = sortProviderCatalog(providers);
+
+    expect(sorted).toHaveLength(providers.length);
+    for (let i = 1; i < sorted.length; i++) {
+      expect(compareProviders(sorted[i - 1], sorted[i])).toBeLessThanOrEqual(0);
+    }
+    // Repeated calls must produce the same order, independent of the stored order.
+    expect(sortProviderCatalog(providers).map((row) => row.id)).toEqual(
+      sorted.map((row) => row.id)
+    );
+  });
+
+  it("getSortedProviders uses the canonical comparator", () => {
+    expect(getSortedProviders().map((row) => row.id)).toEqual(
+      sortProviderCatalog(providers.filter((row) => row.enabled)).map((row) => row.id)
+    );
   });
 });
