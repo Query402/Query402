@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { PaymentAttempt, UsageEvent } from "@query402/shared";
 
@@ -11,12 +13,24 @@ const FIXTURE_PAY_TO = `G${"D".repeat(55)}`;
 const FIXTURE_PAYER = `G${"E".repeat(55)}`;
 const FIXTURE_TX_HASH = "a".repeat(64);
 
+export function ensureTestDataDirectory(): string {
+  const existing = process.env.QUERY402_DATA_DIR?.trim();
+  if (existing) {
+    fs.mkdirSync(existing, { recursive: true });
+    return existing;
+  }
+
+  const created = fs.mkdtempSync(path.join(os.tmpdir(), "query402-data-"));
+  process.env.QUERY402_DATA_DIR = created;
+  return created;
+}
+
 export function createTempAnalyticsDbPath(): string {
-  return `/tmp/query402-analytics-${randomUUID()}.db`;
+  return path.join(ensureTestDataDirectory(), `analytics-${randomUUID()}.db`);
 }
 
 export function createTempJsonPath(): string {
-  return `/tmp/query402-legacy-${randomUUID()}.json`;
+  return path.join(ensureTestDataDirectory(), `legacy-${randomUUID()}.json`);
 }
 
 export async function resetAnalyticsStore(dbPath?: string): Promise<void> {

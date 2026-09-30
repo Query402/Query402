@@ -248,6 +248,20 @@ Response includes:
 - `demoSpendUsd`: Demo-mode payments
 - `failedSpendUsd`: Failed payment attempts
 
+## Agent transcript receipt lines
+
+The agent-client transcript append path only records receipts that pass
+`query402ReceiptSchema` and the agent-side checks (known schema version, a
+payment reference, and a matching provider id). Invalid receipts append nothing
+and fail the command; raw payment headers are never written into the file.
+
+```bash
+npx tsx apps/agent-client/src/transcript.ts \
+  --append-receipt ./receipt.json \
+  --provider search.basic \
+  --transcript ./transcript/agent-receipts.jsonl
+```
+
 ## Related documentation
 
 - **Architecture overview**: [`ARCHITECTURE.md`](../ARCHITECTURE.md)

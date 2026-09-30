@@ -1,10 +1,17 @@
-import type { LatencyBucket, ProviderDefinition, QueryMode, QueryResult } from "@query402/shared";
+import type {
+  LatencyBucket,
+  PaymentEvidence,
+  PaymentProofLinks as SharedPaymentProofLinks,
+  PrivacySafeAnalyticsResponse,
+  ProviderDefinition,
+  QueryMode,
+  QueryResult
+} from "@query402/shared";
 
 /**
  * Public-safe projection of `paymentEvidenceSummary` from the API.
  *
  * Intentionally excludes:
- *  - `payer` wallet address (would leak a specific signer in a public SCF issue)
  *  - `facilitatorResult` payload (could contain signed auth entries)
  *  - grant signatures, grant headers, raw payment headers, secrets
  *
@@ -21,7 +28,15 @@ export interface PublicPaymentEvidence {
   payTo?: string;
   facilitatorUrl?: string;
   transactionHash?: string;
+  payer?: string;
+  error?: string;
+  proofLinks?: PaymentProofLinks;
 }
+
+export type PaymentProofLinks = SharedPaymentProofLinks;
+
+// Re-export privacy-safe analytics for web usage
+export type { PrivacySafeAnalyticsResponse };
 
 export interface PaidQueryResponse {
   traceId: string;
@@ -29,6 +44,8 @@ export interface PaidQueryResponse {
     network: string;
     facilitatorUrl: string;
     evidence: PublicPaymentEvidence;
+    /** Raw payment response header value captured at request time (redacted in receipts). */
+    paymentResponseHeader?: string;
   };
   result: QueryResult;
 }
@@ -107,5 +124,34 @@ export interface AnalyticsResponse {
 
 export type ProviderMap = Record<QueryMode, ProviderDefinition[]>;
 
-// Re-export privacy-safe analytics for web usage
-export type { PrivacySafeAnalyticsResponse };
+export interface HealthResponse {
+  ok?: boolean;
+  status?: string;
+  service?: string;
+  version?: string;
+  nodeEnv?: string;
+  uptimeSeconds?: number;
+  network?: string;
+  demoMode?: boolean;
+  sponsorshipEnabled?: boolean;
+  timestamp?: string;
+  diagnostics?: {
+    network: string;
+    demoMode: boolean;
+    facilitatorConfigured: boolean;
+    facilitatorApiKeyConfigured: boolean;
+    payToConfigured: boolean;
+    sponsorshipEnabled: boolean;
+    sponsorshipSigningSecretConfigured: boolean;
+    anyProviderKeyConfigured: boolean;
+    payToAddress?: string;
+  };
+  [key: string]: unknown;
+}
+
+export interface EvidenceCheckItem {
+  id: string;
+  label: string;
+  status: "pass" | "warn" | "pending";
+  detail?: string;
+}

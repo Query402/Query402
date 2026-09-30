@@ -1,7 +1,52 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { getPaymentEvidenceInfo } from "./PaymentEvidenceBanner.js";
+import { renderToStaticMarkup } from "react-dom/server";
+import React from "react";
+import PaymentEvidenceBanner, { getPaymentEvidenceInfo } from "./PaymentEvidenceBanner.js";
 import type { PaidQueryResponse } from "../types.js";
+import { buildReceipt } from "../lib/receipt.js";
+import type { Query402Receipt } from "@query402/shared";
+
+const NOW = Date.parse("2026-06-30T12:05:00.000Z");
+
+function settledPayment(): PaidQueryResponse["payment"] {
+  return {
+    network: "stellar:testnet",
+    facilitatorUrl: "https://facilitator.example",
+    evidence: {
+      kind: "settled",
+      status: "settled",
+      network: "stellar:testnet",
+      payTo: "GBX...",
+      facilitatorUrl: "https://facilitator.example",
+      payer: "G_PAYER",
+      amount: "0.02",
+      asset: "USDC",
+      transactionHash: "abcd1234hash"
+    }
+  };
+}
+
+function freshReceipt(overrides: Partial<Query402Receipt> = {}): Query402Receipt {
+  return {
+    schema: "query402.receipt.v1",
+    generatedAt: "2026-06-30T12:04:00.000Z",
+    mode: "search",
+    providerId: "search.basic",
+    providerName: "Basic Search",
+    quotedPriceUsd: 0.01,
+    traceId: "trace_1",
+    resultTimestamp: "2026-06-30T12:04:00.000Z",
+    payment: {
+      mode: "wallet",
+      status: "settled",
+      evidenceKind: "settled",
+      transactionHash: "abcd1234hash",
+      network: "stellar:testnet"
+    },
+    ...overrides
+  };
+}
 
 describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
   test("handles missing (undefined) payment evidence", () => {
@@ -71,7 +116,7 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
     assert.match(info.className, /--verified/);
     assert.match(info.description, /G_SPONSOR/);
     assert.match(info.description, /USDC/);
-    assert.strictEqual(info.explorerUrl, undefined); // No Tx hash yet
+    assert.strictEqual(info.explorerUrl, undefined);
   });
 
   test("handles settled payment evidence with explorer link on testnet", () => {
@@ -113,5 +158,91 @@ describe("PaymentEvidenceBanner - getPaymentEvidenceInfo helper", () => {
 
     assert.strictEqual(info.status, "verified");
     assert.strictEqual(info.explorerUrl, "https://stellar.expert/explorer/public/tx/abcd5678hash");
+  });
+});
+
+describe("PaymentEvidenceBanner - receipt + freshness gate", () => {
+  test("renders the banner for a fresh valid receipt (fake clock)", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaymentEvidenceBanner, {
+        payment: settledPayment(),
+        receipt: freshReceipt(),
+        now: NOW
+      })
+    );
+
+    assert.match(html, /payment-evidence-banner/);
+    assert.match(html, /Payment Settled/);
+    assert.doesNotMatch(html, /payment-signature|payment-response|x-payment/i);
+  });
+
+  test("hides the banner when the receipt is expired", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaymentEvidenceBanner, {
+        payment: settledPayment(),
+        receipt: freshReceipt({
+          generatedAt: "2026-06-30T11:00:00.000Z",
+          resultTimestamp: "2026-06-30T11:00:00.000Z"
+        }),
+        now: NOW
+      })
+    );
+
+    assert.strictEqual(html, "");
+  });
+
+  test("hides the banner when the receipt is invalid", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaymentEvidenceBanner, {
+        payment: settledPayment(),
+        receipt: { schema: "nope" } as unknown as Query402Receipt,
+        now: NOW
+      })
+    );
+
+    assert.strictEqual(html, "");
+  });
+
+  test("hides the banner when no receipt is supplied", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaymentEvidenceBanner, {
+        payment: settledPayment(),
+        receipt: null,
+        now: NOW
+      })
+    );
+
+    assert.strictEqual(html, "");
+  });
+
+  test("buildReceipt output still gates through validate + freshness", () => {
+    const receipt = buildReceipt({
+      response: {
+        payment: settledPayment(),
+        result: {
+          mode: "search",
+          providerId: "search.basic",
+          providerName: "Basic Search",
+          priceUsd: 0.01,
+          latencyMs: 10,
+          timestamp: "2026-06-30T12:04:00.000Z",
+          traceId: "trace_1",
+          items: [],
+          source: "deterministic-fallback"
+        }
+      },
+      userPaymentMode: "wallet",
+      generatedAt: new Date("2026-06-30T12:04:00.000Z")
+    });
+
+    const html = renderToStaticMarkup(
+      React.createElement(PaymentEvidenceBanner, {
+        payment: settledPayment(),
+        receipt,
+        now: NOW
+      })
+    );
+
+    assert.match(html, /Payment Settled/);
   });
 });

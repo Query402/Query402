@@ -9,6 +9,9 @@ export function buildPaidClientRequestKey(input: {
   query?: string;
   url?: string;
   payer: string;
+  amount?: string;
+  asset?: string;
+  network?: string;
 }) {
   return JSON.stringify({
     route: input.route,
@@ -16,7 +19,10 @@ export function buildPaidClientRequestKey(input: {
     provider: input.provider,
     query: input.query ?? null,
     url: input.url ?? null,
-    payer: input.payer
+    payer: input.payer,
+    amount: input.amount ?? null,
+    asset: input.asset ?? null,
+    network: input.network ?? null
   });
 }
 

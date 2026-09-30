@@ -9,13 +9,13 @@ import type {
   DetailedAnalyticsResponse,
   QueryMode,
   PaymentSource,
-  ProviderExecutionMetadata
+  ProviderExecutionMetadata,
+  SettlementDigest
 } from "@query402/shared";
 import type {
   PaginationOptions,
   AnalyticsQueryOptions,
-  PaymentUsagePair,
-  SettlementDigest
+  PaymentUsagePair
 } from "./storage/types.js";
 import { getStorageRepository } from "./storage/index.js";
 import {
@@ -25,6 +25,10 @@ import {
 } from "./analytics-service.js";
 import { getProviderById } from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
+import {
+  sanitizeAnalyticsEventForStorage,
+  sanitizePaymentAttemptForStorage
+} from "./analytics-privacy.js";
 
 export interface PersistPaidRequestInput {
   mode: QueryMode;
@@ -118,15 +122,35 @@ function buildUsageEvent(
 }
 
 export async function saveUsageEvent(event: UsageEvent): Promise<void> {
-  await getStorageRepository().saveUsageEvent(event);
+  const sanitized = sanitizeAnalyticsEventForStorage(event);
+  if (!sanitized.ok) {
+    // Reject writes the privacy helper cannot redact.
+    return;
+  }
+  await getStorageRepository().saveUsageEvent(sanitized.value);
 }
 
 export async function savePaymentAttempt(payment: PaymentAttempt): Promise<void> {
-  await getStorageRepository().savePaymentAttempt(payment);
+  const sanitized = sanitizePaymentAttemptForStorage(payment);
+  if (!sanitized.ok) {
+    return;
+  }
+  await getStorageRepository().savePaymentAttempt(sanitized.value);
 }
 
 export async function persistPaymentAndUsage(pair: PaymentUsagePair): Promise<void> {
-  await getStorageRepository().persistPaymentAndUsage(pair);
+  const usage = sanitizeAnalyticsEventForStorage(pair.usage);
+  if (!usage.ok) {
+    return;
+  }
+  const payment = sanitizePaymentAttemptForStorage(pair.payment);
+  if (!payment.ok) {
+    return;
+  }
+  await getStorageRepository().persistPaymentAndUsage({
+    payment: payment.value,
+    usage: usage.value
+  });
 }
 
 export async function getUsageEvents(options?: PaginationOptions): Promise<UsageEvent[]> {

@@ -128,6 +128,8 @@ export function buildAnalyticsSummary(
   const recentUsageLimit = options?.recentUsageLimit ?? DEFAULT_RECENT_LIMIT;
   const recentPaymentLimit = options?.recentPaymentLimit ?? DEFAULT_RECENT_LIMIT;
 
+  const recentTransactions = payments.slice(0, recentPaymentLimit);
+
   return {
     totalQueries: usage.length,
     totalSpendUsd,
@@ -138,7 +140,20 @@ export function buildAnalyticsSummary(
     settledSpendByCategory,
     demoSpendByCategory,
     executionSummary,
-    recentTransactions: payments.slice(0, recentPaymentLimit),
+    totalDemoQueries: usage.filter((event) => event.paymentStatus === "demo-paid").length,
+    totalSettledPayments: payments.filter((payment) => payment.status === "settled").length,
+    spendByPaymentSource: payments.reduce<Record<string, number>>((acc, payment) => {
+      const source = payment.paymentSource ?? "wallet";
+      acc[source] = Number(((acc[source] ?? 0) + payment.amountUsd).toFixed(6));
+      return acc;
+    }, {}),
+    recentDemoActivity: payments
+      .filter((payment) => payment.status === "demo-paid")
+      .slice(0, recentPaymentLimit),
+    recentSettledPayments: payments
+      .filter((payment) => payment.status === "settled")
+      .slice(0, recentPaymentLimit),
+    recentTransactions,
     recentUsage: usage.slice(0, recentUsageLimit)
   };
 }

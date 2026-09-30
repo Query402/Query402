@@ -1,4 +1,4 @@
-type HeaderRecord = Record<string, string | undefined>;
+type HeaderRecord = Record<string, unknown>;
 
 const SENSITIVE_HEADER_PATTERNS = [
   /^payment$/i,
@@ -7,6 +7,8 @@ const SENSITIVE_HEADER_PATTERNS = [
   /^x-payment$/i,
   /^x-payment-response$/i,
   /^x-payment-signature$/i,
+  /^cookie$/i,
+  /^set-cookie$/i,
   /^authorization$/i,
   /^proxy-authorization$/i
 ];

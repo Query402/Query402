@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { UsageEvent, PaymentAttempt, QueryMode } from "@query402/shared";
-import { getPublicAnalytics, getDetailedAnalytics } from "../../../src/lib/analytics-service";
+import { getPublicAnalytics, getDetailedAnalytics } from "./analytics-service.js";
 
 // Test helpers
 function createMockUsageEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
-  const baseTime = new Date("2024-01-15T10:00:00Z").toISOString();
+  const baseTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
   const mode: QueryMode = overrides.mode ?? "search";
   return {
     id: `use_${Math.random().toString(36).slice(2)}`,
@@ -23,7 +23,7 @@ function createMockUsageEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
 }
 
 function createMockPayment(overrides: Partial<PaymentAttempt> = {}): PaymentAttempt {
-  const baseTime = new Date("2024-01-15T10:00:00Z").toISOString();
+  const baseTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
   return {
     id: `pay_${Math.random().toString(36).slice(2)}`,
     endpoint: "/x402/search",
@@ -73,9 +73,7 @@ describe("analytics-service", () => {
           priceUsd: 0.01
         })
       ];
-      const payments = [
-        createMockPayment({ id: "pay_1", status: "settled" })
-      ];
+      const payments = [createMockPayment({ id: "pay_1", status: "settled" })];
 
       const result = getPublicAnalytics(usage, payments);
 
@@ -123,7 +121,9 @@ describe("analytics-service", () => {
 
       // Check that full address is not in the response
       const responseJson = JSON.stringify(result);
-      expect(responseJson).not.toContain("GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ");
+      expect(responseJson).not.toContain(
+        "GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ"
+      );
     });
 
     it("should hash payer keys when within retention", () => {
@@ -148,7 +148,12 @@ describe("analytics-service", () => {
         })
       ];
 
-      const result = getPublicAnalytics(usage, [], {}, { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 });
+      const result = getPublicAnalytics(
+        usage,
+        [],
+        {},
+        { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 }
+      );
 
       expect(result.recentRecords[0].payerHash).toBeUndefined();
     });
@@ -168,7 +173,7 @@ describe("analytics-service", () => {
       expect(firstPage.pagination.nextCursor).toBeDefined();
 
       const secondPage = getPublicAnalytics(usage, [], {
-        cursor: firstPage.pagination.nextCursor,
+        cursor: firstPage.pagination.nextCursor ?? undefined,
         limit: 10
       });
 
@@ -177,11 +182,18 @@ describe("analytics-service", () => {
     });
 
     it("should enforce max page limit", () => {
-      const usage = Array.from({ length: 50 }, (_, i) =>
-        createMockUsageEvent({ id: `use_${i}` })
-      );
+      const usage = Array.from({ length: 50 }, (_, i) => createMockUsageEvent({ id: `use_${i}` }));
 
-      const result = getPublicAnalytics(usage, [], { limit: 200 }, { maxPageLimit: 30, defaultPageLimit: 20 });
+      const result = getPublicAnalytics(
+        usage,
+        [],
+        { limit: 200 },
+        {
+          retentionDays: 90,
+          maxPageLimit: 30,
+          defaultPageLimit: 20
+        }
+      );
 
       expect(result.recentRecords).toHaveLength(30);
     });
@@ -217,15 +229,13 @@ describe("analytics-service", () => {
     });
 
     it("should return pagination metadata", () => {
-      const usage = [
-        createMockUsageEvent({ id: "use_1" })
-      ];
+      const usage = [createMockUsageEvent({ id: "use_1" })];
 
       const result = getPublicAnalytics(usage, [], { limit: 20 });
 
       expect(result.pagination.limit).toBe(20);
       expect(result.pagination.hasMore).toBe(false);
-      expect(result.pagination.nextCursor).toBeUndefined();
+      expect(result.pagination.nextCursor).toBeNull();
     });
   });
 
@@ -250,7 +260,12 @@ describe("analytics-service", () => {
         })
       ];
 
-      const result = getDetailedAnalytics(usage, [], {}, { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 });
+      const result = getDetailedAnalytics(
+        usage,
+        [],
+        {},
+        { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 }
+      );
 
       expect(result.records[0].paymentTxHash).toBeUndefined();
     });
@@ -295,7 +310,7 @@ describe("analytics-service", () => {
       expect(firstPage.pagination.hasMore).toBe(true);
 
       const secondPage = getDetailedAnalytics(usage, [], {
-        cursor: firstPage.pagination.nextCursor,
+        cursor: firstPage.pagination.nextCursor ?? undefined,
         limit: 10
       });
 
@@ -333,9 +348,7 @@ describe("analytics-service", () => {
     });
 
     it("should handle records with no payer key", () => {
-      const usage = [
-        createMockUsageEvent({ payerPublicKey: undefined })
-      ];
+      const usage = [createMockUsageEvent({ payerPublicKey: undefined })];
 
       const result = getPublicAnalytics(usage, []);
 
@@ -343,9 +356,7 @@ describe("analytics-service", () => {
     });
 
     it("should handle invalid cursor gracefully", () => {
-      const usage = [
-        createMockUsageEvent({ id: "use_1" })
-      ];
+      const usage = [createMockUsageEvent({ id: "use_1" })];
 
       const result = getPublicAnalytics(usage, [], { cursor: "invalid-cursor" });
 
@@ -401,7 +412,8 @@ describe("analytics-service", () => {
       const result = getPublicAnalytics(usage, []);
 
       // Public endpoint should not have txHash
-      expect(result.recentRecords[0].paymentTxHash).toBeUndefined();
+      expect(result.recentRecords[0]).not.toHaveProperty("paymentTxHash");
+      expect("paymentTxHash" in result.recentRecords[0]).toBe(false);
     });
 
     it("should never include queryOrUrl in public response", () => {
@@ -436,7 +448,16 @@ describe("analytics-service", () => {
         createMockUsageEvent({ id: `use_${i}` })
       );
 
-      const result = getPublicAnalytics(usage, [], { limit: 10000 }, { maxPageLimit: 100, defaultPageLimit: 20 });
+      const result = getPublicAnalytics(
+        usage,
+        [],
+        { limit: 10000 },
+        {
+          retentionDays: 90,
+          maxPageLimit: 100,
+          defaultPageLimit: 20
+        }
+      );
 
       expect(result.recentRecords).toHaveLength(100);
     });

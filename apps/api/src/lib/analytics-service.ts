@@ -10,7 +10,13 @@ import type {
   PaymentAttempt,
   QueryMode
 } from "@query402/shared";
-import { decodeCursor, encodeCursor, generateNextCursor, hashPayerKey, isWithinRetention } from "./analytics-privacy.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  generateNextCursor,
+  hashPayerKey,
+  isWithinRetention
+} from "./analytics-privacy.js";
 
 interface AnalyticsServiceConfig {
   retentionDays: number;
@@ -73,7 +79,9 @@ function getSettlementStatus(
 
   if (!payment) {
     // Fallback to usage status
-    return usage.paymentStatus === "paid" ? "settled" : "failed";
+    return usage.paymentStatus === "paid" || usage.paymentStatus === "verified"
+      ? "settled"
+      : "failed";
   }
 
   return payment.status;
@@ -125,7 +133,10 @@ function aggregateAnalytics(
 
   for (const event of usage) {
     const status = getSettlementStatus(event, paymentMap);
-    const bucket = aggregation[status];
+    const bucket =
+      aggregation[
+        status === "demo-paid" ? "demoPaid" : (status as "verified" | "settled" | "failed")
+      ];
 
     bucket.totalCount += 1;
     bucket.totalVolumeUsd += event.priceUsd;
@@ -158,7 +169,12 @@ function toPrivacySafeRecord(
     endpoint: usage.endpoint,
     providerId: usage.providerId,
     priceUsd: usage.priceUsd,
-    paymentStatus: usage.paymentStatus === "demo-paid" ? "demo-paid" : usage.paymentStatus === "paid" ? "paid" : "failed",
+    paymentStatus:
+      usage.paymentStatus === "demo-paid"
+        ? "demo-paid"
+        : usage.paymentStatus === "failed"
+          ? "failed"
+          : "paid",
     createdAt: usage.createdAt,
     latencyMs: usage.latencyMs,
     traceId: usage.traceId,
@@ -191,7 +207,12 @@ function toDetailedRecord(
     endpoint: usage.endpoint,
     providerId: usage.providerId,
     priceUsd: usage.priceUsd,
-    paymentStatus: usage.paymentStatus === "demo-paid" ? "demo-paid" : usage.paymentStatus === "paid" ? "paid" : "failed",
+    paymentStatus:
+      usage.paymentStatus === "demo-paid"
+        ? "demo-paid"
+        : usage.paymentStatus === "failed"
+          ? "failed"
+          : "paid",
     paymentTxHash,
     payerKeyHash,
     createdAt: usage.createdAt,
@@ -203,10 +224,7 @@ function toDetailedRecord(
 /**
  * Filter usage records by cursor position for pagination
  */
-function filterByPagination(
-  records: UsageEvent[],
-  cursor?: string
-): UsageEvent[] {
+function filterByPagination(records: UsageEvent[], cursor?: string): UsageEvent[] {
   if (!cursor) {
     return records;
   }
@@ -256,10 +274,9 @@ export function getPublicAnalytics(
     aggregation,
     recentRecords,
     pagination: {
-      cursor: cursorLimit.cursor || "start",
       limit,
       hasMore,
-      nextCursor
+      nextCursor: nextCursor ?? null
     }
   };
 }
@@ -296,10 +313,9 @@ export function getDetailedAnalytics(
     aggregation,
     records: detailedRecords,
     pagination: {
-      cursor: cursorLimit.cursor || "start",
       limit,
       hasMore,
-      nextCursor
+      nextCursor: nextCursor ?? null
     }
   };
 }
@@ -307,7 +323,9 @@ export function getDetailedAnalytics(
 /**
  * Get configuration with defaults
  */
-export function getAnalyticsConfig(overrides?: Partial<AnalyticsServiceConfig>): AnalyticsServiceConfig {
+export function getAnalyticsConfig(
+  overrides?: Partial<AnalyticsServiceConfig>
+): AnalyticsServiceConfig {
   return {
     ...DEFAULT_CONFIG,
     ...overrides

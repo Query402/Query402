@@ -6,7 +6,10 @@ import {
   type PaidRequestFingerprintInput
 } from "./idempotency.js";
 
-function scrapeInput(url: string, overrides: Partial<PaidRequestFingerprintInput> = {}): PaidRequestFingerprintInput {
+function scrapeInput(
+  url: string,
+  overrides: Partial<PaidRequestFingerprintInput> = {}
+): PaidRequestFingerprintInput {
   return {
     method: "POST",
     route: "/v1/scrape",
@@ -57,9 +60,7 @@ describe("normalizeQueryUrl", () => {
     });
 
     it("does not touch an interior slash, only a trailing one", () => {
-      expect(normalizeQueryUrl("https://example.com/a/b/c/")).toBe(
-        "https://example.com/a/b/c"
-      );
+      expect(normalizeQueryUrl("https://example.com/a/b/c/")).toBe("https://example.com/a/b/c");
     });
   });
 
@@ -81,9 +82,7 @@ describe("normalizeQueryUrl", () => {
     });
 
     it("preserves an empty query string marker", () => {
-      expect(normalizeQueryUrl("https://example.com/path?")).toBe(
-        "https://example.com/path?"
-      );
+      expect(normalizeQueryUrl("https://example.com/path?")).toBe("https://example.com/path?");
     });
   });
 
@@ -93,9 +92,7 @@ describe("normalizeQueryUrl", () => {
     });
 
     it("trims surrounding whitespace on an otherwise valid URL", () => {
-      expect(normalizeQueryUrl("  https://example.com/path  ")).toBe(
-        "https://example.com/path"
-      );
+      expect(normalizeQueryUrl("  https://example.com/path  ")).toBe("https://example.com/path");
     });
   });
 });
@@ -199,5 +196,15 @@ describe("buildPaidRequestFingerprint / hashPaidRequestFingerprint — equivalen
       quotedAmountUsd: 0.01
     });
     expect(a).toBe(b);
+  });
+
+  it("binds payment reference into the hash so proof+body must match", () => {
+    const base = scrapeInput("https://example.com/reports");
+    const withProof = hashFor({ ...base, paymentReference: "tx_abc" });
+    const withOtherProof = hashFor({ ...base, paymentReference: "tx_def" });
+    const withoutProof = hashFor(base);
+
+    expect(withProof).not.toBe(withOtherProof);
+    expect(withProof).not.toBe(withoutProof);
   });
 });

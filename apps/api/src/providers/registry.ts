@@ -1,5 +1,12 @@
-import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult } from "./core.js";
-import { getProviderById } from "../lib/pricing.js";
+import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult, PaidQueryContext } from "./core.js";
+import {
+  assertPriceMatch,
+  buildChallengeAmountUnits,
+  getProviderById,
+  getProviderPriceUnits,
+  UnsafePriceError,
+  ZeroPriceError
+} from "../lib/pricing.js";
 import type {
   CircuitBreakerState,
   ExecutionFallbackReason,
@@ -88,8 +95,11 @@ export class DefaultProviderRegistry implements ProviderRegistry {
   async execute(
     mode: "search" | "news" | "scrape",
     providerId: string,
-    queryOrUrl: string
+    queryOrUrl: string,
+    contextOrUnits?: PaidQueryContext | number
   ): Promise<AdapterExecutionResult> {
+    const context = typeof contextOrUnits === "object" ? contextOrUnits : undefined;
+    const challengeAmountUnits = typeof contextOrUnits === "number" ? contextOrUnits : undefined;
     const startedAt = Date.now();
     const providerDef = getProviderById(providerId);
     if (!providerDef) {
@@ -99,6 +109,20 @@ export class DefaultProviderRegistry implements ProviderRegistry {
     if (providerDef.category !== mode) {
       throw new Error(`Provider ${providerId} does not support mode ${mode}`);
     }
+
+    // Pricing gate: the challenge amount must match the catalog price
+    // exactly. Reject before the adapter runs when they diverge, when the
+    // price is zero, or when the price exceeds the safe integer range.
+    const catalogUnits = getProviderPriceUnits(providerId);
+    if (catalogUnits === 0) {
+      throw new ZeroPriceError(providerId);
+    }
+    if (!Number.isSafeInteger(catalogUnits)) {
+      throw new UnsafePriceError(catalogUnits);
+    }
+    const effectiveChallengeUnits =
+      challengeAmountUnits ?? buildChallengeAmountUnits(providerId);
+    assertPriceMatch(effectiveChallengeUnits, catalogUnits);
 
     const adapter = this.adapters.get(providerId);
     if (!adapter) {
@@ -137,7 +161,7 @@ export class DefaultProviderRegistry implements ProviderRegistry {
       }
       // Fallback to executing it directly if no getFallback is provided
       try {
-        const items = await adapter.execute(queryOrUrl);
+        const items = await adapter.execute(queryOrUrl, context);
         return buildResult(items, "deterministic-fallback", {
           fallbackReason: "deterministic-provider"
         });
@@ -163,7 +187,7 @@ export class DefaultProviderRegistry implements ProviderRegistry {
     }
 
     try {
-      const items = await circuit.executeWithTimeout(adapter.execute(queryOrUrl));
+      const items = await circuit.executeWithTimeout(adapter.execute(queryOrUrl, context));
       circuit.recordSuccess();
       return buildResult(items, "live", {
         circuitBreakerState: circuit.getState()

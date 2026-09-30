@@ -1,5 +1,7 @@
 import { AlertCircle, AlertTriangle, ExternalLink, ShieldCheck, HelpCircle } from "lucide-react";
+import type { Query402Receipt } from "@query402/shared";
 import type { PaidQueryResponse } from "../types.js";
+import { evaluatePaymentEvidenceGate } from "../lib/receipt.js";
 
 export interface EvidenceInfo {
   status: "demo" | "verified" | "failed" | "missing";
@@ -8,6 +10,8 @@ export interface EvidenceInfo {
   explorerUrl?: string;
   className: string;
 }
+
+const RAW_PAYMENT_HEADER = /payment-(signature|response)|x-payment|base64[,:]/i;
 
 export function getPaymentEvidenceInfo(
   evidence?: PaidQueryResponse["payment"]["evidence"],
@@ -79,10 +83,33 @@ export function getPaymentEvidenceInfo(
 
 export interface PaymentEvidenceBannerProps {
   payment: PaidQueryResponse["payment"];
+  /** Validated receipt gate input. When omitted/invalid/stale the banner hides. */
+  receipt?: Query402Receipt | null;
+  /** Injected clock for deterministic freshness tests. */
+  now?: Date | number;
 }
 
-export default function PaymentEvidenceBanner({ payment }: PaymentEvidenceBannerProps) {
+/**
+ * Render payment evidence only when the receipt validates and the shared
+ * freshness check says the proof is still current. Never render raw payment
+ * headers.
+ */
+export default function PaymentEvidenceBanner({
+  payment,
+  receipt = null,
+  now = Date.now()
+}: PaymentEvidenceBannerProps) {
+  const gate = evaluatePaymentEvidenceGate(receipt, now);
+  if (!gate.show) {
+    return null;
+  }
+
   const info = getPaymentEvidenceInfo(payment.evidence, payment.network);
+
+  // Defense in depth: never surface raw payment header material in the UI.
+  if (RAW_PAYMENT_HEADER.test(info.description) || RAW_PAYMENT_HEADER.test(info.title)) {
+    return null;
+  }
 
   const getIcon = () => {
     switch (info.status) {
@@ -99,7 +126,7 @@ export default function PaymentEvidenceBanner({ payment }: PaymentEvidenceBanner
   };
 
   return (
-    <div className={`payment-banner ${info.className}`}>
+    <div className={`payment-banner ${info.className}`} data-testid="payment-evidence-banner">
       <div className="payment-banner-main">
         {getIcon()}
         <div className="payment-banner-content">

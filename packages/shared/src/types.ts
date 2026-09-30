@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { paidRouteErrorCodeSchema } from "./schemas.js";
+import {
+  paidRouteErrorCodeSchema,
+  signedGrantSchema,
+  sponsorshipGrantSchema,
+  sponsorshipChallengeSchema,
+  demoScenarioSchema,
+  demoScenarioManifestSchema
+} from "./schemas.js";
 
 export type QueryMode = "search" | "news" | "scrape";
 export type ProviderCategory = QueryMode;
@@ -18,17 +25,52 @@ export type PaidRouteErrorCode = z.infer<typeof paidRouteErrorCodeSchema>;
 
 export type LatencyBucket = "<1s" | "1-3s" | "3-10s" | ">10s" | "unknown";
 
-export type LatencyBand = "fast" | "standard" | "slow";
-export type ReliabilityBand = "demo" | "fallback" | "live";
+export type LatencyBand = "fast" | "standard" | "slow" | "not-verified";
+export type ReliabilityBand = "demo" | "fallback" | "live" | "not-verified";
 export type PaymentMode = "demo" | "x402" | "sponsored";
 export type PaymentModeBand = "x402" | "demo" | "sponsored" | "not-verified";
+
+export interface SponsorshipBudget {
+  limitUsd: number;
+  spentUsd: number;
+  remainingUsd: number;
+  windowStart: string;
+}
+
+export interface SponsorshipGrantPreview {
+  maxAmountUsd: number;
+  ttlSeconds: number;
+  expiresInSeconds: number;
+  restrictions: {
+    mode: QueryMode | null;
+    providerId: string | null;
+  };
+}
+
+export interface SponsorshipPreview {
+  sponsorshipEnabled: boolean;
+  storageAvailable: boolean;
+  available: boolean;
+  decision: string;
+  network: string;
+  wallet: string;
+  mode: QueryMode;
+  provider: string;
+  providerName: string;
+  grant: SponsorshipGrantPreview;
+  quotedPriceUsd: number;
+  priceFitsGrant: boolean;
+  perWalletBudget: SponsorshipBudget;
+  globalBudget: SponsorshipBudget;
+  reason?: string;
+}
 
 export interface SlaBadges {
   latencyBand: LatencyBand;
   latencyLabel: string;
   reliabilityBand: ReliabilityBand;
   reliabilityLabel: string;
-  paymentMode: PaymentMode;
+  paymentMode: PaymentMode | "not-verified";
   paymentLabel: string;
 }
 
@@ -51,6 +93,18 @@ export interface ProviderSlaBadge {
   badgeCopy: string;
 }
 
+export interface ProviderCapability {
+  id: string;
+  name: string;
+  category: ProviderCategory;
+  priceUsd: number;
+  sourceType: SourceType;
+  latencyEstimateMs: number;
+  enabled: boolean;
+  hasFallback: boolean;
+  caveat: string | null;
+}
+
 export interface ProviderDefinition {
   id: string;
   name: string;
@@ -60,9 +114,12 @@ export interface ProviderDefinition {
   latencyEstimateMs: number;
   qualityScore: number;
   sourceType: SourceType;
-  provenance: Provenance;
+  /** Optional for backward compatibility with pre-provenance catalog consumers. */
+  provenance?: Provenance;
   enabled: boolean;
   slaBadge: ProviderSlaBadge;
+  /** Dashboard-facing summary derived from slaBadge. */
+  slaBadges: SlaBadges;
 }
 
 export interface ProviderResultItem {
@@ -131,7 +188,12 @@ export interface UsageEvent {
   queryOrUrl: string;
   priceUsd: number;
   network: string;
-  paymentStatus: "verified" | "settled" | "failed" | "demo-paid";
+  /**
+   * "paid" is a legacy aggregated status meaning a wallet payment was accepted
+   * but settlement state was not yet known; analytics resolves it through the
+   * matching payment attempt.
+   */
+  paymentStatus: "verified" | "settled" | "failed" | "demo-paid" | "paid";
   paymentKind?: "demo" | "verified" | "settled" | "failed";
   paymentTxHash?: string;
   asset?: string;
@@ -140,7 +202,10 @@ export interface UsageEvent {
   facilitatorUrl?: string;
   payerPublicKey?: string;
   traceId: string;
-  paymentId: string;
+  /** Payment attempt that produced this usage event. Optional on legacy rows. */
+  paymentId?: string;
+  /** Structured settlement evidence attached when a payment settles or fails. */
+  paymentEvidence?: PaymentAttempt["evidence"];
   createdAt: string;
   latencyMs: number;
   execution?: ProviderExecutionMetadata;
@@ -174,6 +239,8 @@ export interface PaymentAttempt {
   paymentSource?: PaymentSource;
   sponsorPublicKey?: string;
   errorCode?: PaidRouteErrorCode;
+  /** Settlement lifecycle evidence captured by the x402 middleware. */
+  evidence?: PaymentEvidence;
 }
 
 export interface AnalyticsSummary {
@@ -338,4 +405,63 @@ export interface AnalyticsConfig {
   maxPageLimit: number;
   /** Default page limit */
   defaultPageLimit: number;
+}
+
+export type SponsorshipGrant = z.infer<typeof sponsorshipGrantSchema>;
+export type SignedGrant = z.infer<typeof signedGrantSchema>;
+export type SponsorshipChallenge = z.infer<typeof sponsorshipChallengeSchema>;
+export type DemoScenario = z.infer<typeof demoScenarioSchema>;
+export type DemoScenarioManifest = z.infer<typeof demoScenarioManifestSchema>;
+
+export interface PrivacySafeAnalyticsResponse {
+  aggregation: PrivacySafeAnalyticsAggregation;
+  recentRecords: PrivacySafeUsageRecord[];
+  pagination: CursorPaginationMeta;
+}
+
+export interface SettlementDigest {
+  totalPaidRuns: number;
+  totalSettledAmountUsd: number;
+  settledAmountByAssetNetwork: Record<string, number>;
+  withPaymentEvidence: number;
+  missingPaymentEvidence: number;
+  latestPaymentTimestamp: string | null;
+  generatedAt: string;
+}
+
+export interface SponsorshipPreviewBudget {
+  limitUsd: number;
+  spentUsd: number;
+  remainingUsd: number;
+  windowStart: string;
+}
+
+export interface SponsorshipPreviewRestrictions {
+  mode: QueryMode | null;
+  providerId: string | null;
+}
+
+export interface SponsorshipPreviewGrant {
+  maxAmountUsd: number;
+  ttlSeconds: number;
+  expiresInSeconds: number;
+  restrictions: SponsorshipPreviewRestrictions;
+}
+
+export interface SponsorshipPreview {
+  sponsorshipEnabled: boolean;
+  storageAvailable: boolean;
+  available: boolean;
+  decision: string;
+  network: string;
+  wallet: string;
+  mode: QueryMode;
+  provider: string;
+  providerName: string;
+  grant: SponsorshipPreviewGrant;
+  quotedPriceUsd: number;
+  priceFitsGrant: boolean;
+  perWalletBudget: SponsorshipPreviewBudget;
+  globalBudget: SponsorshipPreviewBudget;
+  reason?: string;
 }

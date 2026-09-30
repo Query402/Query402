@@ -1,3 +1,7 @@
+import {
+  runProviderAfterConfirmation,
+  type FacilitatorPaymentResult
+} from "../lib/facilitator-check.js";
 import { getProviderById, providers, validateProviderCatalog } from "../lib/pricing.js";
 import { registry } from "../providers/index.js";
 import { nanoid } from "nanoid";
@@ -49,11 +53,32 @@ export class ProviderFailedError extends Error {
   }
 }
 
-export async function executeQuery(params: {
+export async function executeQuery(
+  params: {
+    mode: "search" | "news" | "scrape";
+    provider: string;
+    q?: string;
+    url?: string;
+  },
+  options?: { facilitatorResult: FacilitatorPaymentResult | null }
+): Promise<QueryResult> {
+  if (options) {
+    return runProviderAfterConfirmation({
+      providerId: params.provider,
+      facilitatorResult: options.facilitatorResult,
+      run: () => executeQueryBody(params)
+    });
+  }
+
+  return executeQueryBody(params);
+}
+
+async function executeQueryBody(params: {
   mode: "search" | "news" | "scrape";
   provider: string;
   q?: string;
   url?: string;
+  paymentReference?: string;
 }): Promise<QueryResult> {
   const providerDef = getProviderById(params.provider);
   if (!providerDef) {
@@ -67,9 +92,18 @@ export async function executeQuery(params: {
 
   const safeInput = params.mode === "scrape" ? await validateScrapeUrl(queryOrUrl) : queryOrUrl;
 
+  // Build context for paid query providers (news and search)
+  const context =
+    params.mode === "news" || params.mode === "search"
+      ? {
+          paymentReference: params.paymentReference ?? "",
+          safetyPassed: true // news/search queries don't require URL safety validation
+        }
+      : undefined;
+
   let execution;
   try {
-    execution = await registry.execute(params.mode, params.provider, safeInput);
+    execution = await registry.execute(params.mode, params.provider, safeInput, context);
   } catch (error) {
     logger.error(
       {
@@ -135,7 +169,7 @@ export async function fetchPaginatedAnalytics(
   cursor: string | null = null
 ): Promise<PaginatedAnalyticsResponse> {
   // 1. Read all logs from our local JSON file storage engine
-  const allEvents = getUsageEvents();
+  const allEvents = await getUsageEvents();
 
   let sliceStartIndex = 0;
 

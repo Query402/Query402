@@ -4,6 +4,51 @@ import {
   redactSensitiveHeaders,
   redactSensitiveObject
 } from "./redact-headers.js";
+import { redactLoggerHeaders } from "./logger.js";
+import { buildPaymentDebugMetadata } from "./payment-debug.js";
+
+const FIXTURE_PAYMENT_SECRET = "fixture-payment-secret-123";
+
+describe("header redaction at output helpers", () => {
+  const headers = {
+    Authorization: `Bearer ${FIXTURE_PAYMENT_SECRET}`,
+    Payment: FIXTURE_PAYMENT_SECRET,
+    Cookie: `session=${FIXTURE_PAYMENT_SECRET}`,
+    "X-Request-Id": "req-456"
+  };
+
+  it("redacts headers before the logger serializes an error log", () => {
+    const logPayload = {
+      headers: redactLoggerHeaders(headers),
+      statusCode: 402
+    };
+    const output = JSON.stringify(logPayload);
+
+    expect(output).not.toContain(FIXTURE_PAYMENT_SECRET);
+    expect(output).toContain("Authorization");
+    expect(output).toContain("Payment");
+    expect(output).toContain("Cookie");
+    expect(logPayload.statusCode).toBe(402);
+  });
+
+  it("redacts headers in payment debug metadata and preserves status", () => {
+    const debug = buildPaymentDebugMetadata({
+      failureType: "invalid_payment_header",
+      route: "/x402/search",
+      providerId: "search.basic",
+      expectedPrice: "$0.01",
+      headers,
+      statusCode: 402
+    });
+    const output = JSON.stringify(debug);
+
+    expect(output).not.toContain(FIXTURE_PAYMENT_SECRET);
+    expect(debug.headers).toHaveProperty("Authorization", "[REDACTED]");
+    expect(debug.headers).toHaveProperty("Payment", "[REDACTED]");
+    expect(debug.headers).toHaveProperty("Cookie", "[REDACTED]");
+    expect(debug.statusCode).toBe(402);
+  });
+});
 
 describe("redactSensitiveHeaders", () => {
   it("redacts payment header case-insensitively", () => {
@@ -40,6 +85,20 @@ describe("redactSensitiveHeaders", () => {
 
     expect(result.AUTHORIZATION).toBe("[REDACTED]");
     expect(result["X-Request-Id"]).toBe("abc123");
+  });
+
+  it("redacts cookie headers while preserving their names", () => {
+    const result = redactSensitiveHeaders({
+      Cookie: "session=fixture-payment-secret",
+      "Set-Cookie": "token=fixture-payment-secret",
+      "X-Request-Id": "req-456"
+    });
+
+    expect(result).toEqual({
+      Cookie: "[REDACTED]",
+      "Set-Cookie": "[REDACTED]",
+      "X-Request-Id": "req-456"
+    });
   });
 
   it("preserves non-sensitive headers used for debugging", () => {
@@ -129,6 +188,11 @@ describe("isSensitiveHeader", () => {
     expect(isSensitiveHeader("authorization")).toBe(true);
     expect(isSensitiveHeader("Authorization")).toBe(true);
     expect(isSensitiveHeader("AUTHORIZATION")).toBe(true);
+  });
+
+  it("identifies cookie headers as sensitive", () => {
+    expect(isSensitiveHeader("cookie")).toBe(true);
+    expect(isSensitiveHeader("Set-Cookie")).toBe(true);
   });
 
   it("returns false for non-sensitive headers", () => {

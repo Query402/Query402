@@ -20,10 +20,12 @@ Query402 implements a privacy-safe, paginated analytics system that clearly sepa
 Returns privacy-safe, aggregated analytics with no sensitive data exposed.
 
 **Query Parameters:**
+
 - `cursor` (optional): Base64-encoded cursor for pagination
 - `limit` (optional): Number of records to return (1-100, default: 20)
 
 **Response:**
+
 ```typescript
 interface PrivacySafeAnalyticsResponse {
   aggregation: {
@@ -74,11 +76,13 @@ interface PrivacySafeAnalyticsResponse {
 ```
 
 **Example Request:**
+
 ```bash
 curl "http://localhost:3001/api/v1/analytics?limit=10"
 ```
 
 **Example Response:**
+
 ```json
 {
   "aggregation": {
@@ -143,10 +147,12 @@ Returns analytics with more detail for authorized access. Still redacts sensitiv
 Requires x402 payment protocol (similar to other /x402/* endpoints).
 
 **Query Parameters:**
+
 - `cursor` (optional): Base64-encoded cursor for pagination
 - `limit` (optional): Number of records to return (1-100, default: 20)
 
 **Response:**
+
 ```typescript
 interface DetailedAnalyticsResponse {
   aggregation: PrivacySafeAnalyticsAggregation; // Same as public
@@ -189,6 +195,7 @@ curl "http://localhost:3001/api/v1/analytics?cursor=<nextCursor>&limit=20"
 ```
 
 **Cursor Format:**
+
 - Cursors are base64-encoded JSON containing `{ timestamp, id }`
 - Cursors are opaque to clients - do not attempt to decode or manipulate them
 - Invalid cursors are treated as "start from beginning"
@@ -202,11 +209,12 @@ By default, sensitive fields are retained for 90 days:
 - Query text and URLs are never exposed in any response
 
 **Configuration:**
+
 ```javascript
 const config = {
-  retentionDays: 90,       // Adjust as needed
-  maxPageLimit: 100,       // Maximum records per page
-  defaultPageLimit: 20     // Default if limit not specified
+  retentionDays: 90, // Adjust as needed
+  maxPageLimit: 100, // Maximum records per page
+  defaultPageLimit: 20 // Default if limit not specified
 };
 ```
 
@@ -237,11 +245,13 @@ The following data is **always safe to expose**:
 ## Analytics Flow
 
 ### 1. Query Execution
+
 ```
 Client → Query Request (e.g., /x402/search) → API
 ```
 
 ### 2. Settlement Recording
+
 ```
 API saves UsageEvent + PaymentAttempt to persistence layer
 - UsageEvent includes: queryOrUrl, payerPublicKey, paymentStatus
@@ -249,6 +259,7 @@ API saves UsageEvent + PaymentAttempt to persistence layer
 ```
 
 ### 3. Public Analytics
+
 ```
 GET /api/v1/analytics → Aggregates + Redacts
 - Strips all query text and URLs
@@ -257,6 +268,7 @@ GET /api/v1/analytics → Aggregates + Redacts
 ```
 
 ### 4. Authorized Analytics (Protected)
+
 ```
 GET /x402/analytics/detailed → More Detail + Redacted
 - Includes transaction hashes (within retention)
@@ -270,16 +282,16 @@ GET /x402/analytics/detailed → More Detail + Redacted
 
 ```javascript
 // Fetch public analytics
-const response = await fetch('/api/v1/analytics?limit=5');
+const response = await fetch("/api/v1/analytics?limit=5");
 const data = await response.json();
 
 // Display settlement breakdown
-console.log('On-Chain Settled Volume:', data.aggregation.settled.totalVolumeUsd);
-console.log('Demo Queries:', data.aggregation.demoPaid.totalCount);
-console.log('Failed Attempts:', data.aggregation.failed.totalCount);
+console.log("On-Chain Settled Volume:", data.aggregation.settled.totalVolumeUsd);
+console.log("Demo Queries:", data.aggregation.demoPaid.totalCount);
+console.log("Failed Attempts:", data.aggregation.failed.totalCount);
 
 // Display recent records (privacy-safe)
-data.recentRecords.forEach(record => {
+data.recentRecords.forEach((record) => {
   console.log(`${record.mode} query: $${record.priceUsd} (${record.paymentStatus})`);
 });
 
@@ -305,6 +317,7 @@ The test suite validates:
 7. **Settlement aggregation**: Confirms demo/verified/settled/failed counted correctly
 
 Run tests:
+
 ```bash
 npm test -- analytics-service.test.ts
 npm test -- analytics-privacy.test.ts
@@ -336,11 +349,16 @@ const analyticsConfig = {
 You can override these when calling analytics functions directly:
 
 ```javascript
-getPublicAnalytics(usageEvents, payments, {}, {
-  retentionDays: 30,
-  maxPageLimit: 50,
-  defaultPageLimit: 10
-});
+getPublicAnalytics(
+  usageEvents,
+  payments,
+  {},
+  {
+    retentionDays: 30,
+    maxPageLimit: 50,
+    defaultPageLimit: 10
+  }
+);
 ```
 
 ## Security Headers

@@ -272,8 +272,18 @@ describe("public routes", () => {
       const { persistPaymentAndUsage } = await import("../lib/persistence.js");
       await persistPaymentAndUsage(
         buildPaidQueryFixture({
-          payment: { id: "pay_fixture_demo_01", status: "demo-paid", evidenceKind: "demo", transactionHash: undefined },
-          usage: { id: "use_fixture_demo_01", paymentStatus: "demo-paid", paymentKind: "demo", paymentTxHash: undefined }
+          payment: {
+            id: "pay_fixture_demo_01",
+            status: "demo-paid",
+            evidenceKind: "demo",
+            transactionHash: undefined
+          },
+          usage: {
+            id: "use_fixture_demo_01",
+            paymentStatus: "demo-paid",
+            paymentKind: "demo",
+            paymentTxHash: undefined
+          }
         })
       );
 
@@ -458,12 +468,16 @@ describe("public routes", () => {
     it("supports pagination parameters (limit and offset) on /api/usage", async () => {
       const app = await createPublicApp();
       const { persistPaymentAndUsage } = await import("../lib/persistence.js");
-      const { buildTestPaymentAttempt, buildTestUsageEvent } = await import("../test/storage-test-helpers.js");
+      const { buildTestPaymentAttempt, buildTestUsageEvent } =
+        await import("../test/storage-test-helpers.js");
 
       for (let i = 1; i <= 5; i++) {
         await persistPaymentAndUsage({
           payment: buildTestPaymentAttempt({ id: `pay_page_${i}`, amountUsd: 0.01 }),
-          usage: buildTestUsageEvent({ id: `use_page_${i}`, createdAt: `2026-06-21T10:0${i}:00.000Z` })
+          usage: buildTestUsageEvent({
+            id: `use_page_${i}`,
+            createdAt: `2026-06-21T10:0${i}:00.000Z`
+          })
         });
       }
 
@@ -552,4 +566,3 @@ describe("public routes", () => {
     });
   });
 });
-

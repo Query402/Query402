@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import type { NextFunction, Request, Response } from "express";
 import type { PaymentAttempt, QueryMode, UsageEvent } from "@query402/shared";
-import { buildPaymentProofLinks } from "@query402/shared";
+import { buildPaymentProofLinks, isExpiredTimestamp } from "@query402/shared";
 import type {
   PaymentPayload,
   PaymentRequirements,
@@ -168,14 +168,7 @@ export function assertRequestMatchesEvidence(req: Request, evidence: PaymentEvid
   assertPriceMatchesProvider(evidence);
 }
 
-export function buildEvidenceFromRequirements(input: {
-  req: Request;
-  requirements: PaymentRequirements;
-  paymentPayload?: PaymentPayload;
-  verifyResult?: VerifyResponse;
-  settleResult?: SettleResponse;
-  failure?: string;
-}): PaymentEvidence {
+export function buildEvidenceFromRequirements(input: {}): PaymentEvidence {
   const mode = routeModeFromPath(input.req.path);
   const providerId = getProviderFromRequest(input.req);
   if (!mode || typeof providerId !== "string") {
@@ -329,7 +322,7 @@ function toJsonRecord(value: unknown): Record<string, unknown> | undefined {
 export async function persistPaymentEvidence(
   evidence: PaymentEvidence,
   record?: PaidRequestRecord
-) {
+@{
   assertPriceMatchesProvider(evidence);
   const now = new Date().toISOString();
   const payment: PaymentAttempt = {
@@ -410,8 +403,22 @@ export function requirePaymentEvidence(req: Request, res: Response, next: NextFu
       throw new PaymentEvidenceError("Payment evidence is missing");
     }
     assertRequestMatchesEvidence(req, evidence);
-    return next();
+    next();
   } catch (error) {
-    return next(error);
+    next(error);
+  }
+}
+
+export function assertPaymentProofFresh(
+  evidence: PaymentEvidence,
+  now: Date | number = Date.now(),
+  maxAgeMs?: number
+) {
+  const timestamp =
+    "facilitatorResult" in evidence && evidence.facilitatorResult
+      ? (evidence.facilitatorResult as { timestamp?: unknown }).timestamp
+      : undefined;
+  if (isExpiredTimestamp(timestamp, now, maxAgeMs)) {
+    throw new PaymentEvidenceError("Payment proof has expired");
   }
 }

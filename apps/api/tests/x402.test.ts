@@ -10,12 +10,12 @@ test("evidence pipeline updates correctly on settlement", async (t) => {
     path: "/x402/search",
     headers: {} as Record<string, string>
   };
-  
+
   const verifyCtx = {
-    transportContext: { 
-      req, 
-      request: req, 
-      adapter: { getQueryParam: (key: string) => key === "provider" ? "search.basic" : undefined } 
+    transportContext: {
+      req,
+      request: req,
+      adapter: { getQueryParam: (key: string) => (key === "provider" ? "search.basic" : undefined) }
     },
     requirements: { amount: "0.01", payTo: "G..." },
     paymentPayload: "raw_header"
@@ -25,11 +25,11 @@ test("evidence pipeline updates correctly on settlement", async (t) => {
 
   // 1. Simulate onAfterVerify which creates the payment attempt
   await handlers.onAfterVerify(verifyCtx);
-  
+
   const paymentId = req.headers["x-payment-attempt-id"];
   assert.ok(paymentId, "onAfterVerify should set x-payment-attempt-id");
 
-  const paymentAfterVerify = getPaymentAttempts().find(p => p.id === paymentId);
+  const paymentAfterVerify = getPaymentAttempts().find((p) => p.id === paymentId);
   assert.strictEqual(paymentAfterVerify?.evidence.status, "verified");
 
   // 2. Simulate the endpoint handler persisting the usage event
@@ -48,7 +48,7 @@ test("evidence pipeline updates correctly on settlement", async (t) => {
     latencyMs: 100
   });
 
-  const usageAfterVerify = getUsageEvents().find(u => u.traceId === traceId);
+  const usageAfterVerify = getUsageEvents().find((u) => u.traceId === traceId);
   assert.strictEqual(usageAfterVerify?.evidence.status, "verified");
 
   // 3. Simulate onAfterSettle updating the payment
@@ -61,8 +61,8 @@ test("evidence pipeline updates correctly on settlement", async (t) => {
 
   await handlers.onAfterSettle(settleCtx);
 
-  const paymentAfterSettle = getPaymentAttempts().find(p => p.id === paymentId);
-  const usageAfterSettle = getUsageEvents().find(u => u.traceId === traceId);
+  const paymentAfterSettle = getPaymentAttempts().find((p) => p.id === paymentId);
+  const usageAfterSettle = getUsageEvents().find((u) => u.traceId === traceId);
 
   assert.strictEqual(paymentAfterSettle?.evidence.status, "settled");
   if (paymentAfterSettle?.evidence.status === "settled") {
@@ -80,12 +80,12 @@ test("evidence pipeline updates correctly on failure", async (t) => {
     path: "/x402/news",
     headers: {} as Record<string, string>
   };
-  
+
   const verifyCtx = {
-    transportContext: { 
-      req, 
+    transportContext: {
+      req,
       request: req,
-      adapter: { getQueryParam: (key: string) => key === "provider" ? "news.basic" : undefined }
+      adapter: { getQueryParam: (key: string) => (key === "provider" ? "news.basic" : undefined) }
     },
     requirements: { amount: "0.015", payTo: "G..." },
     paymentPayload: "raw_header_2"
@@ -95,11 +95,11 @@ test("evidence pipeline updates correctly on failure", async (t) => {
 
   // 1. Simulate onAfterVerify which creates the payment attempt
   await handlers.onAfterVerify(verifyCtx);
-  
+
   const paymentId = req.headers["x-payment-attempt-id"];
   assert.ok(paymentId, "onAfterVerify should set x-payment-attempt-id");
 
-  const paymentAfterVerify = getPaymentAttempts().find(p => p.id === paymentId);
+  const paymentAfterVerify = getPaymentAttempts().find((p) => p.id === paymentId);
   assert.strictEqual(paymentAfterVerify?.evidence.status, "verified");
 
   // 2. Simulate the endpoint handler persisting the usage event
@@ -128,8 +128,8 @@ test("evidence pipeline updates correctly on failure", async (t) => {
 
   await handlers.onSettleFailure(failCtx);
 
-  const paymentAfterFail = getPaymentAttempts().find(p => p.id === paymentId);
-  const usageAfterFail = getUsageEvents().find(u => u.traceId === traceId);
+  const paymentAfterFail = getPaymentAttempts().find((p) => p.id === paymentId);
+  const usageAfterFail = getUsageEvents().find((u) => u.traceId === traceId);
 
   assert.strictEqual(paymentAfterFail?.evidence.status, "failed");
   if (paymentAfterFail?.evidence.status === "failed") {
@@ -145,11 +145,11 @@ test("evidence pipeline updates correctly on failure", async (t) => {
 test("proof that forged demo headers cannot bypass real verification when demoMode is false", async (t) => {
   const originalDemoMode = config.demoMode;
   config.demoMode = false;
-  
+
   // create middleware
   const { createX402Middleware } = await import("../src/lib/x402.js");
   const middleware = createX402Middleware();
-  
+
   const req = {
     method: "GET",
     path: "/x402/search",
@@ -161,19 +161,25 @@ test("proof that forged demo headers cannot bypass real verification when demoMo
     headers: {},
     query: { provider: "search.basic" }
   };
-  
+
   let statusCode = 200;
   let jsonResponse: any = null;
   const res = {
     status: (code: number) => {
       statusCode = code;
-      return { json: (data: any) => { jsonResponse = data; } };
+      return {
+        json: (data: any) => {
+          jsonResponse = data;
+        }
+      };
     }
   };
-  
+
   let nextCalled = false;
-  const next = () => { nextCalled = true; };
-  
+  const next = () => {
+    nextCalled = true;
+  };
+
   await new Promise<void>((resolve) => {
     // Cast middleware to handle our mock req/res
     (middleware as any)(req, res, () => {
@@ -183,21 +189,25 @@ test("proof that forged demo headers cannot bypass real verification when demoMo
     // the real middleware will likely call res.status(402).json(...) synchronously or async
     setTimeout(resolve, 50);
   });
-  
-  assert.strictEqual(nextCalled, false, "Should not call next() for real verification with forged headers");
+
+  assert.strictEqual(
+    nextCalled,
+    false,
+    "Should not call next() for real verification with forged headers"
+  );
   assert.strictEqual(statusCode, 402, "Should return 402 Payment Required");
   assert.ok(jsonResponse?.error === "Payment Required", "Should require payment");
-  
+
   config.demoMode = originalDemoMode;
 });
 
 test("demo flow creates demo-paid attempt when demoMode is true", async (t) => {
   const originalDemoMode = config.demoMode;
   config.demoMode = true;
-  
+
   const { createX402Middleware } = await import("../src/lib/x402.js");
   const middleware = createX402Middleware();
-  
+
   const req = {
     method: "GET",
     path: "/x402/news",
@@ -209,25 +219,26 @@ test("demo flow creates demo-paid attempt when demoMode is true", async (t) => {
     headers: {},
     query: { provider: "news.basic" }
   };
-  
+
   const res = {};
   let nextCalled = false;
-  const next = () => { nextCalled = true; };
-  
+  const next = () => {
+    nextCalled = true;
+  };
+
   (middleware as any)(req, res, next);
-  
+
   assert.strictEqual(nextCalled, true, "Should call next() in demo mode with headers");
-  
+
   const paymentId = (req.headers as any)["x-payment-attempt-id"];
   assert.ok(paymentId, "Should generate a payment attempt ID");
-  
-  const payment = getPaymentAttempts().find(p => p.id === paymentId);
+
+  const payment = getPaymentAttempts().find((p) => p.id === paymentId);
   assert.ok(payment, "Payment attempt should be saved");
   assert.strictEqual(payment?.evidence.status, "demo-paid");
   if (payment?.evidence.status === "demo-paid") {
     assert.strictEqual(payment.evidence.demoId, "demo_tx_123");
   }
-  
+
   config.demoMode = originalDemoMode;
 });
-

@@ -44,6 +44,13 @@ function usage() {
   console.log("  --help, -h         Show this help and exit");
   console.log("  --provider <id>    Provider ID (default: search.basic / news.fast / scrape.page)");
   console.log("  --receipt, --json  Output structured JSON receipt only");
+  console.log("");
+  console.log("Payment safety (env):");
+  console.log("  X402_MAX_PRICE_USD  Max price per query the CLI will sign (default 0.05)");
+  console.log("  X402_ASSET          Expected settlement asset (default USDC)");
+  console.log("  STELLAR_NETWORK     Expected network (default stellar:testnet)");
+  console.log("  The 402 challenge is checked against these before any payment is signed.");
+  console.log("  A mismatching provider, network, asset, or amount aborts without signing.");
 }
 
 function readArg(flag: string, args: string[]) {

@@ -1,8 +1,10 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 import { query402ReceiptSchema } from "@query402/shared";
+import { isPaymentProofFresh } from "@query402/shared";
 import type { PaidQueryResponse, PublicPaymentEvidence } from "../types.js";
-import { buildReceipt, receiptFilename, serializeReceipt } from "./receipt.js";
+import { buildReceipt, receiptFilename, serializeReceipt, evaluatePaymentEvidenceGate, validateReceipt } from "./receipt.js";
+import { isReceiptFresh } from "./freshness.js";
 
 function settledEvidence(overrides: Partial<PublicPaymentEvidence> = {}): PublicPaymentEvidence {
   return {
@@ -42,6 +44,8 @@ function settledResponse(overrides: Partial<PaidQueryResponse> = {}): PaidQueryR
 }
 
 const FIXED_DATE = new Date("2026-06-30T12:34:56.000Z");
+const FIXED_CLOCK = () => FIXED_DATE;
+const MAX_AGE_MS = 5 * 60 * 1000;
 
 describe("buildReceipt", () => {
   test("captures all required fields from a settled wallet response", () => {
@@ -190,6 +194,65 @@ describe("buildReceipt", () => {
   });
 });
 
+describe("payment proof freshness", () => {
+  test("a fresh proof is accepted by the shared helper and shown as paid", () => {
+    const response = settledResponse();
+    const proofTimestamp = "2026-06-30T12:34:00.000Z";
+
+    assert.equal(
+      isPaymentProofFresh({
+        proofTimestamp,
+        now: FIXED_CLOCK,
+        maxAgeMs: MAX_AGE_MS
+      }),
+      true
+    );
+    assert.equal(
+      isReceiptFresh({
+        proofTimestamp,
+        now: FIXED_CLOCK,
+        maxAgeMs: MAX_AGE_MS
+      }),
+      true
+    );
+    assert.equal(response.payment.evidence.status, "settled");
+  });
+
+  test("a proof at the exact boundary is rejected by both the shared helper and the web client", () => {
+    const boundaryTimestamp = new Date(FIXED_DATE.getTime() - MAX_AGE_MS).toISOString();
+
+    assert.equal(
+      isPaymentProofFresh({
+        proofTimestamp: boundaryTimestamp,
+        now: FIXED_CLOCK,
+        maxAgeMs: MAX_AGE_MS
+      }),
+      false
+    );
+    assert.equal(
+      isReceiptFresh({
+        proofTimestamp: boundaryTimestamp,
+        now: FIXED_CLOCK,
+        maxAgeMs: MAX_AGE_MS
+      }),
+      false
+    );
+  });
+
+  test("an expired proof is not shown as paid on the web fixture", () => {
+    const expiredTimestamp = new Date(FIXED_DATE.getTime() - MAX_AGE_MS - 1).toISOString();
+
+    assert.equal(
+      isReceiptFresh({
+        proofTimestamp: expiredTimestamp,
+        now: FIXED_CLOCK,
+        maxAgeMs: MAX_AGE_MS
+      }),
+      false
+    );
+  });
+});
+
 describe("receiptFilename", () => {
   test("produces a stable, slugged filename", () => {
     const receipt = buildReceipt({
@@ -199,6 +262,47 @@ describe("receiptFilename", () => {
     });
     const filename = receiptFilename(receipt, FIXED_DATE);
 
-    assert.match(filename, /^query402-receipt-search-search\.basic-2026-06-30T12-34-56\.000Z\.json$/);
+    assert.match(filename, /^query402-receipt-search-search\.basic-2026-06-30T12-34-56-000Z\.json$/);
+  });
+});
+
+describe("validateReceipt + evaluatePaymentEvidenceGate", () => {
+  const now = Date.parse("2026-06-30T12:34:56.000Z");
+
+  test("accepts a fresh built receipt", () => {
+    const receipt = buildReceipt({
+      response: settledResponse(),
+      userPaymentMode: "wallet",
+      generatedAt: FIXED_DATE
+    });
+
+    assert.deepEqual(validateReceipt(receipt), receipt);
+    const gate = evaluatePaymentEvidenceGate(receipt, now);
+    assert.equal(gate.show, true);
+    assert.equal(gate.reason, "ok");
+  });
+
+  test("rejects an invalid receipt", () => {
+    assert.equal(validateReceipt({ schema: "nope" }), null);
+    const gate = evaluatePaymentEvidenceGate({ schema: "nope" }, now);
+    assert.equal(gate.show, false);
+    assert.equal(gate.reason, "invalid_receipt");
+  });
+
+  test("rejects a stale receipt with a fake clock", () => {
+    const receipt = buildReceipt({
+      response: settledResponse({
+        result: {
+          ...settledResponse().result,
+          timestamp: "2026-06-30T10:00:00.000Z"
+        }
+      }),
+      userPaymentMode: "wallet",
+      generatedAt: new Date("2026-06-30T10:00:00.000Z")
+    });
+
+    const gate = evaluatePaymentEvidenceGate(receipt, now);
+    assert.equal(gate.show, false);
+    assert.equal(gate.reason, "stale_receipt");
   });
 });

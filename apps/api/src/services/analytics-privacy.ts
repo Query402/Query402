@@ -1,4 +1,8 @@
-import { PrivacySafeAnalyticsRecord } from "@query402/shared";
+import type { PrivacySafeAnalyticsRecord, UsageEvent } from "@query402/shared";
+import {
+  sanitizeAnalyticsEventForStorage,
+  type AnalyticsPrivacyResult
+} from "../lib/analytics-privacy.js";
 
 export function formatPrivacySafeAnalytics(rawRecords: any[]): PrivacySafeAnalyticsRecord[] {
   return rawRecords.map(record => {
@@ -17,4 +21,13 @@ export function formatPrivacySafeAnalytics(rawRecords: any[]): PrivacySafeAnalyt
       asset: 'XLM'
     };
   });
+}
+
+/**
+ * Service-layer entry point: run every analytics write candidate through the privacy helper.
+ */
+export function prepareAnalyticsEventForPersistence(
+  event: UsageEvent | (UsageEvent & Record<string, unknown>)
+): AnalyticsPrivacyResult<UsageEvent> {
+  return sanitizeAnalyticsEventForStorage(event);
 }

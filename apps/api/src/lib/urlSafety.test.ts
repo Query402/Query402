@@ -52,7 +52,7 @@ describe("validateUrl", () => {
     expect(result.safe).toBe(false);
   });
 
-  it("rejects link-local 169.254.x.x", () => {
+  it("rejects link local 169.254.x.x", () => {
     const result = validateUrl("http://169.254.1.1");
     expect(result.safe).toBe(false);
   });
@@ -81,6 +81,28 @@ describe("validateUrl", () => {
     const msg = safeErrorMessage(new Error("ECONNREFUSED"));
     expect(msg).toContain("not reachable");
     expect(msg).not.toContain("ECONNREFUSED");
+  });
+});
+
+describe("resolveAndValidate", () => {
+  it("rejects loopback hostname", async () => {
+    const result = await resolveAndValidate("http://localhost:3000/admin");
+    expect(result.safe).toBe(false);
+  });
+
+  it("rejects loopback IP literal", async () => {
+    const result = await resolveAndValidate("http://127.0.0.1:8080");
+    expect(result.safe).toBe(false);
+  });
+
+  it("rejects private range IP literal", async () => {
+    const result = await resolveAndValidate("http://192.168.1.100");
+    expect(result.safe).toBe(false);
+  });
+
+  it("rejects IPv6 loopback literal", async () => {
+    const result = await resolveAndValidate("http://[::1]:8080");
+    expect(result.safe).toBe(false);
   });
 });
 

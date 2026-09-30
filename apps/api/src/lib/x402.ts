@@ -9,7 +9,18 @@ import { ExactStellarScheme } from "@x402/stellar/exact/server";
 import type { NextFunction, Request, Response } from "express";
 import type { HTTPRequestContext } from "@x402/core/server";
 import type { PaymentPayload } from "@x402/core/types";
-import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
+import {
+  assertPriceMatch,
+  buildChallengeAmountUnits,
+  getProviderById,
+  getProviderPriceUnits,
+  protectedRouteBasePrices,
+  unitsToUsdString,
+  usdStringToUnits,
+  PriceMismatchError,
+  UnsafePriceError,
+  ZeroPriceError
+} from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
 import { buildPaymentDebugMetadata } from "./payment-debug.js";
 import { redactSensitiveObject } from "./redact-headers.js";
@@ -103,6 +114,45 @@ export function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) 
   return formatUsdPrice(provider.priceUsd);
 }
 
+export function resolveRoutePriceUnits(context: HTTPRequestContext, mode: RouteMode): number {
+  const providerId = getProviderFromContext(context);
+  if (!providerId) {
+    return usdStringToUnits(basePriceByMode[mode]);
+  }
+
+  const provider = getProviderById(providerId);
+  if (!provider || provider.category !== mode) {
+    return usdStringToUnits(basePriceByMode[mode]);
+  }
+
+  return getProviderPriceUnits(providerId);
+}
+
+export function buildRouteChallengePrice(context: HTTPRequestContext, mode: RouteMode): string {
+  const providerId = getProviderFromContext(context);
+  if (!providerId) {
+    const baseUnits = usdStringToUnits(basePriceByMode[mode]);
+    if (baseUnits === 0) {
+      throw new ZeroPriceError(mode);
+    }
+    return unitsToUsdString(baseUnits);
+  }
+
+  const provider = getProviderById(providerId);
+  if (!provider || provider.category !== mode) {
+    const baseUnits = usdStringToUnits(basePriceByMode[mode]);
+    if (baseUnits === 0) {
+      throw new ZeroPriceError(mode);
+    }
+    return unitsToUsdString(baseUnits);
+  }
+
+  const catalogUnits = getProviderPriceUnits(providerId);
+  const challengeUnits = buildChallengeAmountUnits(providerId);
+  assertPriceMatch(challengeUnits, catalogUnits);
+  return unitsToUsdString(challengeUnits);
+}
+
 function clonePaymentPayload(paymentPayload: unknown): PaymentPayload | undefined {
   if (!paymentPayload) {
     return undefined;
@@ -135,7 +185,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
       setPaymentEvidence(req, buildDemoPaymentEvidence(req));
     } catch (error) {
       return next(error);
-    }
+  }
     return next();
   }
 
@@ -188,6 +238,11 @@ export const getX402LifecycleHandlers = (network: string) => ({
         id: paymentId,
         endpoint: req.path,
         providerId,
+        amountUsd: Number(ctx.requirements.amount),
+        network,
+        payToAddress: ctx.requirements.payTo,
+        facilitatorUrl: config.X402_FACILITATOR_URL,
+        status: "verified",
         evidence: {
           status: "verified",
           network,
@@ -332,7 +387,7 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "search"),
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "search"),
         payTo
       },
       description: "Paid search endpoint on Query402",
@@ -342,7 +397,7 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "news"),
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "news"),
         payTo
       },
       description: "Paid news endpoint on Query402",
@@ -352,7 +407,7 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "scrape"),
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "scrape"),
         payTo
       },
       description: "Paid scrape endpoint on Query402",

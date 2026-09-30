@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { redactSensitiveHeaders } from "./redact-headers.js";
 
 export interface PaymentDebugMetadata {
   failureType: string;
@@ -7,6 +8,8 @@ export interface PaymentDebugMetadata {
   expectedPrice: string;
   facilitatorStatus?: string;
   paymentHeaderFingerprint?: string;
+  headers?: Record<string, unknown>;
+  statusCode?: number;
   traceId?: string;
   nextStep: string;
 }
@@ -48,6 +51,8 @@ export function buildPaymentDebugMetadata(input: {
   expectedPrice: string;
   facilitatorStatus?: string;
   paymentHeader?: string;
+  headers?: Record<string, unknown>;
+  statusCode?: number;
   traceId?: string;
 }): PaymentDebugMetadata {
   return {
@@ -58,6 +63,8 @@ export function buildPaymentDebugMetadata(input: {
     nextStep: resolveNextStep(input.failureType),
     facilitatorStatus: input.facilitatorStatus,
     paymentHeaderFingerprint: computePaymentHeaderFingerprint(input.paymentHeader),
+    ...(input.headers ? { headers: redactSensitiveHeaders(input.headers) } : {}),
+    ...(input.statusCode !== undefined ? { statusCode: input.statusCode } : {}),
     traceId: input.traceId
   };
 }

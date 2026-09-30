@@ -5,6 +5,7 @@ import type {
   ProviderDefinition,
   ProviderSlaBadge,
   ReliabilityBand,
+  SlaBadges,
   SourceType
 } from "@query402/shared";
 
@@ -18,6 +19,104 @@ export class ProviderCatalogConflictError extends Error {
     this.name = "ProviderCatalogConflictError";
     this.providerIds = ids;
   }
+}
+
+export class PriceMismatchError extends Error {
+  readonly code = "price_mismatch" as const;
+  constructor(readonly challengeUnits: number, readonly catalogUnits: number) {
+    super(`x402 challenge amount (${challengeUnits}) does not match catalog price (${catalogUnits})`);
+    this.name = "PriceMismatchError";
+  }
+}
+
+export class ZeroPriceError extends Error {
+  readonly code = "zero_price" as const;
+  constructor(readonly providerId: string) {
+    super(`Provider "${providerId}" has a zero price; refusing to build an x402 challenge`);
+    this.name = "ZeroPriceError";
+  }
+}
+
+export class UnsafePriceError extends Error {
+  readonly code = "unsafe_price" as const;
+  constructor(readonly value: number) {
+    super(`Price ${value} is outside the safe integer range`);
+    this.name = "UnsafePriceError";
+  }
+}
+
+export const USD_UNITS_PER_DOLLAR = 1_000_000;
+
+export function assertSafePriceUnits(units: number): number {
+  if (!Number.isSafeInteger(units)) {
+    throw new UnsafePriceError(units);
+  }
+  return units;
+}
+
+export function usdStringToUnits(price: string): number {
+  const trimmed = price.trim();
+  const match = /^\$?(\d+)(?:\.(\d+))?$/.exec(trimmed);
+  if (!match) {
+    throw new UnsafePriceError(Number.NaN);
+  }
+  const whole = match[1];
+  const frac = match[2] ?? "";
+  const fracPadded = (frac + "000000").slice(0, 6);
+  const units = Number(whole) * USD_UNITS_PER_DOLLAR + Number(fracPadded);
+  if (!Number.isSafeInteger(units)) {
+    throw new UnsafePriceError(units);
+  }
+  return units;
+}
+
+export function unitsToUsdString(units: number): string {
+  if (!Number.isSafeInteger(units)) {
+    throw new UnsafePriceError(units);
+  }
+  const whole = Math.trunc(units / USD_UNITS_PER_DOLLAR);
+  const frac = units % USD_UNITS_PER_DOLLAR;
+  if (frac === 0) {
+    return `$${whole}`;
+  }
+  const fracStr = String(frac).padStart(6, "0").replace(/0+$/, "");
+  return `$${whole}.${fracStr}`;
+}
+
+export function priceUsdToUnits(priceUsd: number): number {
+  if (!Number.isFinite(priceUsd)) {
+    throw new UnsafePriceError(priceUsd);
+  }
+  const units = Math.round(priceUsd * USD_UNITS_PER_DOLLAR);
+  if (!Number.isSafeInteger(units)) {
+    throw new UnsafePriceError(units);
+  }
+  return units;
+}
+
+export function getProviderPriceUnits(providerId: string): number {
+  const provider = getProviderById(providerId);
+  if (!provider) {
+    throw new Error(`Provider not found or disabled: ${providerId}`);
+  }
+  return priceUsdToUnits(provider.priceUsd);
+}
+
+export function assertPriceMatch(challengeUnits: number, catalogUnits: number): void {
+  if (challengeUnits !== catalogUnits) {
+    throw new PriceMismatchError(challengeUnits, catalogUnits);
+  }
+}
+
+export function buildChallengeAmountUnits(providerId: string): number {
+  const catalogUnits = getProviderPriceUnits(providerId);
+  if (catalogUnits === 0) {
+    throw new ZeroPriceError(providerId);
+  }
+  assertSafePriceUnits(catalogUnits);
+  const challengeUnits = catalogUnits;
+  assertPriceMatch(challengeUnits, catalogUnits);
+  return challengeUnits;
 }
 
 const envKeyMapping: Record<string, string[]> = {
@@ -110,6 +209,53 @@ export function computeSlaBadge(
   return { latencyBand, reliabilityBand, paymentMode, badgeCopy };
 }
 
+/**
+ * Dashboard-facing SLA badge summary. Deliberately distinct from the canonical
+ * per-provider slaBadge: latency thresholds here come from the original
+ * catalog-badge feature (<=800ms fast, <=1500ms standard), deterministic
+ * fallback providers are reported as "fallback", and payment mode is always
+ * x402 because every catalog provider settles through the x402 flow.
+ */
+export function deriveSlaBadges(providerData: {
+  sourceType: ProviderDefinition["sourceType"];
+  latencyEstimateMs: number;
+}): SlaBadges {
+  const latencyBand =
+    providerData.latencyEstimateMs <= 800
+      ? "fast"
+      : providerData.latencyEstimateMs <= 1500
+        ? "standard"
+        : "slow";
+
+  const latencyLabels: Record<string, string> = {
+    fast: "Fast response",
+    standard: "Standard latency",
+    slow: "Higher latency"
+  };
+
+  const reliabilityBand =
+    providerData.sourceType === "live"
+      ? "live"
+      : providerData.sourceType === "deterministic-fallback"
+        ? "fallback"
+        : "demo";
+
+  const reliabilityLabels: Record<string, string> = {
+    live: "Live results",
+    fallback: "Fallback cached",
+    demo: "Demo reliability"
+  };
+
+  return {
+    latencyBand,
+    latencyLabel: latencyLabels[latencyBand],
+    reliabilityBand,
+    reliabilityLabel: reliabilityLabels[reliabilityBand],
+    paymentMode: "x402",
+    paymentLabel: "Pay-per-query (x402)"
+  };
+}
+
 export function buildCapabilityMatrix(): ProviderCapability[] {
   return providers
     .map((p) => ({
@@ -140,7 +286,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 99,
     sourceType: "live",
     provenance: "live",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(1500, "live"),
+    slaBadges: deriveSlaBadges({ sourceType: "live", latencyEstimateMs: 1500 })
   },
   {
     id: "search.basic",
@@ -152,7 +300,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 75,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(700, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 700 })
   },
   {
     id: "search.pro",
@@ -164,7 +314,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 90,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(1100, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 1100 })
   },
   {
     id: "news.fast",
@@ -176,7 +328,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 72,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(800, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 800 })
   },
   {
     id: "news.deep",
@@ -188,7 +342,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 93,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(1400, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 1400 })
   },
   {
     id: "scrape.page",
@@ -200,7 +356,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 70,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(1000, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 1000 })
   },
   {
     id: "scrape.extract",
@@ -212,7 +370,9 @@ export const providers: ProviderDefinition[] = [
     qualityScore: 95,
     sourceType: "deterministic-fallback",
     provenance: "mock",
-    enabled: true
+    enabled: true,
+    slaBadge: computeSlaBadge(1700, "deterministic-fallback"),
+    slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 1700 })
   }
 ];
 

@@ -1,4 +1,69 @@
 import { config } from "./config.js";
+import { getProviderById } from "./pricing.js";
+
+export const PRICED_ASSET = "USDC";
+
+export class FacilitatorPaymentError extends Error {
+  constructor() {
+    super("payment_not_confirmed");
+    this.name = "FacilitatorPaymentError";
+  }
+}
+
+export interface FacilitatorPaymentResult {
+  asset?: string;
+  amount?: string;
+  destination?: string;
+  secret?: string;
+}
+
+export function pricedPaymentForProvider(providerId: string) {
+  const provider = getProviderById(providerId);
+  const destination = config.X402_PAY_TO_ADDRESS ?? "";
+  if (!provider || !destination) {
+    throw new FacilitatorPaymentError();
+  }
+
+  return {
+    asset: PRICED_ASSET,
+    amount: provider.priceUsd.toString(),
+    destination
+  };
+}
+
+export function assertFacilitatorConfirmsPrice(input: {
+  providerId: string;
+  facilitatorResult: FacilitatorPaymentResult | null;
+}): void {
+  const priced = pricedPaymentForProvider(input.providerId);
+  const result = input.facilitatorResult;
+  if (!result?.asset || result.amount === undefined || result.amount === "" || !result.destination) {
+    throw new FacilitatorPaymentError();
+  }
+
+  const paid = Number(result.amount);
+  const expected = Number(priced.amount);
+  if (
+    result.asset !== priced.asset ||
+    result.destination !== priced.destination ||
+    !Number.isFinite(paid) ||
+    paid !== expected
+  ) {
+    throw new FacilitatorPaymentError();
+  }
+}
+
+export function runProviderAfterConfirmation<T>(input: {
+  providerId: string;
+  facilitatorResult: FacilitatorPaymentResult | null;
+  run: () => T;
+}): T {
+  assertFacilitatorConfirmsPrice({
+    providerId: input.providerId,
+    facilitatorResult: input.facilitatorResult
+  });
+  return input.run();
+}
 
 interface FacilitatorCheckResult {
   ok: boolean;

@@ -53,7 +53,6 @@ ANALYTICS_DB_PATH=data/analytics.db
    - `GET /api/usage` — optional `?limit=` and `?offset=` (max 500 rows per export; returns HTTP 400 `over_limit_export_size` if exceeded)
    - `GET /api/analytics` — optional `?recentUsageLimit=` and `?recentPaymentLimit=` (max 500 rows per query; returns HTTP 400 `over_limit_export_size` if exceeded)
 
-
 ### Migrating from legacy `db.json`
 
 If you have an old `db.json` from before issue #5:
@@ -90,6 +89,22 @@ The tool auto-discovers common legacy paths, including the old cwd bug path `app
 **`idempotency_keys`** — x402 idempotency locks and cached responses (separate from sponsorship idempotency in `sponsorship.db`).
 
 Retention is bounded to the **500 most recent** usage events and payment attempts per table.
+
+### Privacy gate before every write
+
+Every analytics write goes through `sanitizeAnalyticsEventForStorage` /
+`sanitizePaymentAttemptForStorage` in `apps/api/src/lib/analytics-privacy.ts`
+(also exposed via `apps/api/src/services/analytics-privacy.ts`).
+
+Before a row is persisted the helper:
+
+1. **Drops query text** — `queryOrUrl` is stored as an empty string.
+2. **Drops payment headers** — `payment`, `payment-response`, `x-payment`, and related header/payload fields are removed (including nested `headers` maps).
+3. **Strips URL userinfo** — username/password segments are removed from URL-valued fields.
+4. **Keeps** provider id, payment/status, and a **coarse** (hour-precision) timestamp, plus other non-sensitive analytics fields.
+5. **Rejects the write** when it finds a sensitive field it cannot redact — nothing is stored for that event.
+
+Persistence APIs (`saveUsageEvent`, `savePaymentAttempt`, `persistPaymentAndUsage`) enforce this gate; callers must not bypass them to write raw events.
 
 ---
 

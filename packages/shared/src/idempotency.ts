@@ -10,6 +10,11 @@ export interface PaidRequestFingerprintInput {
   payer: string;
   network: string;
   quotedAmountUsd: number;
+  /**
+   * Payment proof reference (settled tx hash or demo proof key). Bound into the
+   * idempotency hash so the same key cannot replay a different paid body.
+   */
+  paymentReference?: string | null;
 }
 
 export interface PaidRequestFingerprint {
@@ -23,6 +28,8 @@ export interface PaidRequestFingerprint {
   payer: string;
   network: string;
   quotedAmountUsd: number;
+  /** Omitted when absent so older hashes without a proof stay stable. */
+  paymentReference?: string;
 }
 
 /**
@@ -79,7 +86,7 @@ function normalizeQueryInput(mode: QueryMode, query?: string, url?: string) {
 export function buildPaidRequestFingerprint(
   input: PaidRequestFingerprintInput
 ): PaidRequestFingerprint {
-  return {
+  const fingerprint: PaidRequestFingerprint = {
     method: input.method,
     route: input.route,
     provider: input.provider,
@@ -88,6 +95,13 @@ export function buildPaidRequestFingerprint(
     network: input.network,
     quotedAmountUsd: Number(input.quotedAmountUsd.toFixed(6))
   };
+
+  const paymentReference = input.paymentReference?.trim();
+  if (paymentReference) {
+    fingerprint.paymentReference = paymentReference;
+  }
+
+  return fingerprint;
 }
 
 export function hashPaidRequestFingerprint(fingerprint: PaidRequestFingerprint): string {

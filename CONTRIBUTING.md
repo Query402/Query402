@@ -100,3 +100,5 @@ wallets, live payments, or provider credentials.
 - [ ] `npm run format:check` passes (or formatting was applied with `npm run format`).
 - [ ] No `.env` files, credentials, private keys, or generated build output are committed.
 - [ ] The pull request description explains the change and links the related issue.
+
+...

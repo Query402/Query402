@@ -1,10 +1,17 @@
-import { Router, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { queryModeSchema, stellarPublicKeySchema } from "@query402/shared";
 import { z } from "zod";
 import { config } from "../lib/config.js";
 import { createChallenge, verifyAndConsumeChallenge } from "../lib/sponsorship/challenge.js";
 import { issueGrant } from "../lib/sponsorship/grant.js";
+import {
+  beginSponsorshipIdempotency,
+  completeSponsorshipIdempotency,
+  abortSponsorshipIdempotency,
+  type SponsorshipIdempotencyInput
+} from "../lib/sponsorship/idempotency.js";
 import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
+import { isIdempotencyStorageAvailable } from "../lib/idempotency/service.js";
 
 const challengeRequestSchema = z.object({
   wallet: stellarPublicKeySchema
@@ -30,6 +37,11 @@ function sponsorshipDisabled(res: Response) {
 
 function signingNotConfigured(res: Response) {
   return res.status(503).json({ error: "sponsorship_signing_not_configured" });
+}
+
+function readSponsorshipIdempotencyKey(req: Request): string | undefined {
+  const key = req.get("Idempotency-Key")?.trim();
+  return key ? key : undefined;
 }
 
 sponsorshipRouter.post("/api/sponsorship/challenge", (req, res) => {
@@ -61,12 +73,55 @@ sponsorshipRouter.post("/api/sponsorship/grants", (req, res, next) => {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
 
+    // Idempotent issuance: a repeated Idempotency-Key returns the ORIGINAL
+    // grant instead of minting (and later debiting) a second one. The replay
+    // hash binds the key to the payer wallet so a key cannot be reused across
+    // wallets, and challenge consumption below is still one-shot.
+    const idempotencyKey = readSponsorshipIdempotencyKey(req);
+    let idempotencyInput: SponsorshipIdempotencyInput | undefined;
+    if (idempotencyKey) {
+      if (!isIdempotencyStorageAvailable()) {
+        return res.status(503).json({ error: "idempotency_storage_unavailable" });
+      }
+
+      idempotencyInput = {
+        key: idempotencyKey,
+        wallet: parsed.data.wallet,
+        amountUsd: config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD
+      };
+
+      const gate = beginSponsorshipIdempotency(idempotencyInput);
+      if (gate.action === "replay") {
+        return res.status(200).json(gate.signedGrant);
+      }
+      if (gate.action === "conflict") {
+        return res.status(409).json({ error: "idempotency_key_conflict" });
+      }
+      if (gate.action === "in_progress") {
+        return res.status(409).json({ error: "idempotency_in_progress" });
+      }
+    }
+
     const verification = verifyAndConsumeChallenge(parsed.data);
     if (!verification.ok) {
+      if (idempotencyInput) {
+        abortSponsorshipIdempotency(idempotencyInput);
+      }
       return res.status(403).json({ error: verification.error });
     }
 
     const signedGrant = issueGrant(parsed.data.wallet);
+
+    if (idempotencyInput) {
+      try {
+        completeSponsorshipIdempotency(idempotencyInput, signedGrant);
+      } catch (cacheError) {
+        // Never fail an already-issued grant because the replay cache write
+        // failed; the grant signature remains valid either way.
+        console.warn("sponsorship idempotency cache write failed", cacheError);
+      }
+    }
+
     return res.status(200).json(signedGrant);
   } catch (error) {
     return next(error);

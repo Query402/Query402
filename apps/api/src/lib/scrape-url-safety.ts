@@ -42,28 +42,28 @@ const DEFAULT_ACCEPTED_CONTENT_TYPES = [
 ];
 
 const IPV4_BLOCKED_RANGES: Array<[number, number]> = [
-  [toIPv4Number("0.0.0.0"), toIPv4Number("0.255.255.255")],
-  [toIPv4Number("10.0.0.0"), toIPv4Number("10.255.255.255")],
-  [toIPv4Number("100.64.0.0"), toIPv4Number("100.127.255.255")],
-  [toIPv4Number("127.0.0.0"), toIPv4Number("127.255.255.255")],
-  [toIPv4Number("169.254.0.0"), toIPv4Number("169.254.255.255")],
-  [toIPv4Number("172.16.0.0"), toIPv4Number("172.31.255.255")],
-  [toIPv4Number("192.0.0.0"), toIPv4Number("192.0.0.255")],
-  [toIPv4Number("192.88.99.0"), toIPv4Number("192.88.99.255")],
-  [toIPv4Number("192.0.2.0"), toIPv4Number("192.0.2.255")],
-  [toIPv4Number("192.168.0.0"), toIPv4Number("192.168.255.255")],
-  [toIPv4Number("198.18.0.0"), toIPv4Number("198.19.255.255")],
-  [toIPv4Number("198.51.100.0"), toIPv4Number("198.51.100.255")],
-  [toIPv4Number("203.0.113.0"), toIPv4Number("203.0.113.255")],
-  [toIPv4Number("224.0.0.0"), toIPv4Number("239.255.255.255")],
-  [toIPv4Number("240.0.0.0"), toIPv4Number("255.255.255.255")]
+  [toIPV4Number("0.0.0.0"), toIPV4Number("0.255.255.255")],
+  [toIPV4Number("10.0.0.0"), toIPV4Number("10.255.255.255")],
+  [toIPV4Number("100.64.0.0"), toIPV4Number("100.127.255.255")],
+  [toIPV4Number("127.0.0.0"), toIPV4Number("127.255.255.255")],
+  [toIPV4Number("169.254.0.0"), toIPV4Number("169.254.255.255")],
+  [toIPV4Number("172.16.0.0"), toIPV4Number("172.31.255.255")],
+  [toIPV4Number("192.0.0.0"), toIPV4Number("192.0.0.255")],
+  [toIPV4Number("192.88.99.0"), toIPV4Number("192.88.99.255")],
+  [toIPV4Number("192.0.2.0"), toIPV4Number("192.0.2.255")],
+  [toIPV4Number("192.168.0.0"), toIPV4Number("192.168.255.255")],
+  [toIPV4Number("198.18.0.0"), toIPV4Number("198.19.255.255")],
+  [toIPV4Number("198.51.100.0"), toIPV4Number("198.51.100.255")],
+  [toIPV4Number("203.0.113.0"), toIPV4Number("203.0.113.255")],
+  [toIPV4Number("224.0.0.0"), toIPV4Number("239.255.255.255")],
+  [toIPV4Number("240.0.0.0"), toIPV4Number("255.255.255.255")]
 ];
 
-function toIPv4Number(address: string) {
+function toIPV4Number(address: string) {
   return address.split(".").reduce((total, octet) => total * 256 + Number(octet), 0) >>> 0;
 }
 
-function parseIPv4(address: string) {
+function parseIPV4(address: string) {
   const parts = address.split(".");
   if (parts.length !== 4) {
     return null;
@@ -85,7 +85,7 @@ function parseIPv4(address: string) {
   return octets.join(".");
 }
 
-function parseIPv4MappedIPv6(address: string) {
+function parseIPV4MappedIPv6(address: string) {
   const normalized = trimIPv6Brackets(address).toLowerCase();
   const marker = "::ffff:";
   if (!normalized.startsWith(marker)) {
@@ -93,7 +93,7 @@ function parseIPv4MappedIPv6(address: string) {
   }
 
   const value = normalized.slice(marker.length);
-  const dotted = parseIPv4(value);
+  const dotted = parseIPV4(value);
   if (dotted) {
     return dotted;
   }
@@ -107,12 +107,12 @@ function parseIPv4MappedIPv6(address: string) {
 }
 
 function isBlockedIPv4(address: string) {
-  const parsed = parseIPv4(address);
+  const parsed = parseIPV4(address);
   if (!parsed) {
     return true;
   }
 
-  const value = toIPv4Number(parsed);
+  const value = toIPV4Number(parsed);
   return IPV4_BLOCKED_RANGES.some(([start, end]) => value >= start && value <= end);
 }
 
@@ -144,9 +144,9 @@ function normalizeHostname(hostname: string) {
 }
 
 function isBlockedIPv6(address: string) {
-  const mappedIPv4 = parseIPv4MappedIPv6(address);
-  if (mappedIPv4) {
-    return isBlockedIPv4(mappedIPv4);
+  const mappedIPV4 = parseIPV4MappedIPv6(address);
+  if (mappedIPV4) {
+    return isBlockedIPv4(mappedIPV4);
   }
 
   const parts = expandIPv6(address);
@@ -157,7 +157,7 @@ function isBlockedIPv6(address: string) {
   const [first, second] = parts;
   const isUnspecified = parts.every((part) => part === 0);
   const isLoopback = parts.slice(0, 7).every((part) => part === 0) && parts[7] === 1;
-  const isIPv4Translation = first === 0x64 && second === 0xff9b;
+  const isIPV4Translation = first === 0x64 && second === 0xff9b;
   const isDocumentation = first === 0x2001 && second === 0xdb8;
   const isTeredo = first === 0x2001 && second === 0;
   const isBenchmarking = first === 0x2001 && second === 0x2;
@@ -165,7 +165,7 @@ function isBlockedIPv6(address: string) {
   return (
     isUnspecified ||
     isLoopback ||
-    isIPv4Translation ||
+    isIPV4Translation ||
     (first & 0xffc0) === 0xfe80 ||
     (first & 0xfe00) === 0xfc00 ||
     (first & 0xff00) === 0xff00 ||
@@ -178,7 +178,7 @@ function isBlockedIPv6(address: string) {
 }
 
 function isBlockedAddress(address: string, family?: number) {
-  const mappedIPv4 = parseIPv4MappedIPv6(address);
+  const mappedIPv4 = parseIPV4MappedIPv6(address);
   if (mappedIPv4) {
     return isBlockedIPv4(mappedIPv4);
   }
@@ -328,7 +328,13 @@ export async function safeScrapeFetch(
           throw new UnsafeScrapeUrlError();
         }
 
-        currentUrl = new URL(location, currentUrl).toString();
+        const nextUrl = new URL(location, currentUrl);
+        const current = new URL(currentUrl);
+        if (nextUrl.protocol !== current.protocol || nextUrl.host !== current.host) {
+          await validateScrapeUrl(nextUrl.toString(), options);
+        }
+
+        currentUrl = nextUrl.toString();
         continue;
       }
 

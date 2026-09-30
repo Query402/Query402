@@ -60,29 +60,31 @@ const envSchema = z.object({
 
 const parsed = envSchema.safeParse(process.env);
 
-if (!parsed.success) {
-  throw new Error(`Invalid environment: ${parsed.error.message}`);
+if (!parsed.success || !parsed.data) {
+  throw new Error(`Invalid environment: ${parsed.error?.message ?? "unknown error"}`);
 }
 
+const env = parsed.data;
+
 export const config = {
-  ...parsed.data,
-  corsOrigins: (parsed.data.CORS_ORIGINS ?? "")
+  ...env,
+  corsOrigins: (env.CORS_ORIGINS ?? "")
     .split(",")
     .map((origin) => normalizeOrigin(origin))
     .filter(Boolean),
-  groqModel: parsed.data.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile",
-  demoMode: parsed.data.DEMO_MODE === "true",
-  sponsorshipEnabled: parsed.data.SPONSORSHIP_ENABLED === "true",
-  sponsorshipDbPath: resolveApiDataPath(parsed.data.SPONSORSHIP_DB_PATH),
-  analyticsDbPath: resolveApiDataPath(parsed.data.ANALYTICS_DB_PATH),
-  analyticsStorage: parsed.data.ANALYTICS_STORAGE
+  groqModel: env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile",
+  demoMode: env.DEMO_MODE === "true",
+  sponsorshipEnabled: env.SPONSORSHIP_ENABLED === "true",
+  sponsorshipDbPath: resolveApiDataPath(env.SPONSORSHIP_DB_PATH),
+  analyticsDbPath: resolveApiDataPath(env.ANALYTICS_DB_PATH),
+  analyticsStorage: env.ANALYTICS_STORAGE
 };
 
 export function getFacilitatorConfigured(): boolean {
   return (
-    !!parsed.data.X402_FACILITATOR_URL &&
-    !!parsed.data.X402_FACILITATOR_API_KEY &&
-    parsed.data.X402_FACILITATOR_API_KEY.length > 0
+    !!env.X402_FACILITATOR_URL &&
+    !!env.X402_FACILITATOR_API_KEY &&
+    env.X402_FACILITATOR_API_KEY.length > 0
   );
 }
 
@@ -112,16 +114,13 @@ export function getConfigSnapshot(): ConfigSnapshot {
     sponsorshipEnabled: config.sponsorshipEnabled,
     sponsorshipSigningSecretConfigured: Boolean(config.SPONSORSHIP_SIGNING_SECRET),
     anyProviderKeyConfigured: Boolean(
-      config.BRAVE_API_KEY ||
-        config.SERPAPI_API_KEY ||
-        config.NEWS_API_KEY ||
-        config.GROQ_API_KEY
+      config.BRAVE_API_KEY || config.SERPAPI_API_KEY || config.NEWS_API_KEY || config.GROQ_API_KEY
     )
   };
 }
 
 export function requirePayToAddress(): string {
-  const addr = parsed.data.X402_PAY_TO_ADDRESS;
+  const addr = env.X402_PAY_TO_ADDRESS;
   if (!addr || addr.length === 0) {
     throw new Error("X402_PAY_TO_ADDRESS is not configured");
   }

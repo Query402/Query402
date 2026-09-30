@@ -42,3 +42,25 @@ export function isStaleTimestamp(
 ): boolean {
   return !isFreshTimestamp(value, now, maxAgeMs);
 }
+
+/**
+ * Return true only for timestamps that are expired according to the shared
+ * max age. The boundary is inclusive: a proof exactly `maxAgeMs` old is expired.
+ * Invalid or future timestamps are also considered expired so callers never
+ * serve or render malformed proofs.
+ */
+export function isPaymentProofFresh(input: {
+  proofTimestamp: unknown;
+  now?: Date | number;
+  maxAgeMs?: number;
+}): boolean {
+  return isFreshTimestamp(input.proofTimestamp, input.now, input.maxAgeMs);
+}
+
+export function isExpiredTimestamp(
+  value: unknown,
+  now: Date | number = Date.now(),
+  maxAgeMs: number = DEFAULT_TIMESTAMP_MAX_AGE_MS
+): boolean {
+  return !isFreshTimestamp(value, now, maxAgeMs);
+}

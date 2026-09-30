@@ -4,8 +4,12 @@ import {
   isWithinRetention,
   encodeCursor,
   decodeCursor,
-  generateNextCursor
-} from "../../../src/lib/analytics-privacy";
+  generateNextCursor,
+  stripUrlUserinfo,
+  toCoarseTimestamp,
+  sanitizeAnalyticsEventForStorage
+} from "./analytics-privacy.js";
+import { buildTestUsageEvent } from "../test/storage-test-helpers.js";
 
 describe("analytics-privacy", () => {
   describe("hashPayerKey", () => {
@@ -169,6 +173,67 @@ describe("analytics-privacy", () => {
 
       expect(decoded).toBeDefined();
       expect(decoded?.timestamp).toBe("2024-01-15T10:00:00Z");
+    });
+  });
+
+  describe("stripUrlUserinfo / toCoarseTimestamp", () => {
+    it("strips username and password from URLs", () => {
+      expect(stripUrlUserinfo("https://user:secret@example.com/path")).toBe(
+        "https://example.com/path"
+      );
+    });
+
+    it("leaves URLs without userinfo unchanged", () => {
+      expect(stripUrlUserinfo("https://example.com/path")).toBe("https://example.com/path");
+    });
+
+    it("coarsens timestamps to the hour", () => {
+      expect(toCoarseTimestamp("2024-01-15T10:42:33.123Z")).toBe("2024-01-15T10:00:00.000Z");
+    });
+  });
+
+  describe("sanitizeAnalyticsEventForStorage", () => {
+    it("drops query text and payment headers while keeping provider id and status", () => {
+      const event = {
+        ...buildTestUsageEvent({
+          queryOrUrl: "SELECT * FROM secrets",
+          createdAt: "2024-01-15T10:42:33.123Z",
+          facilitatorUrl: "https://agent:token@facilitator.example/x402"
+        }),
+        headers: {
+          payment: "eyJhbGciOiJIUzI1NiJ9.payment-payload",
+          "payment-response": "settlement-proof-header",
+          "x-trace-id": "trace-keep"
+        }
+      };
+
+      const result = sanitizeAnalyticsEventForStorage(event);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.queryOrUrl).toBe("");
+      expect(result.value.providerId).toBe("search.basic");
+      expect(result.value.paymentStatus).toBe("settled");
+      expect(result.value.createdAt).toBe("2024-01-15T10:00:00.000Z");
+      expect(result.value.facilitatorUrl).toBe("https://facilitator.example/x402");
+
+      const stored = JSON.stringify(result.value);
+      expect(stored).not.toContain("SELECT * FROM secrets");
+      expect(stored).not.toContain("eyJhbGciOiJIUzI1NiJ9.payment-payload");
+      expect(stored).not.toContain("settlement-proof-header");
+      expect(stored).not.toContain("agent:token");
+    });
+
+    it("rejects events with fields the helper cannot redact", () => {
+      const event = {
+        ...buildTestUsageEvent(),
+        rawPaymentSecret: "sk_live_cannot_redact_this"
+      };
+
+      const result = sanitizeAnalyticsEventForStorage(event);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.cannotRedact).toContain("rawPaymentSecret");
     });
   });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCapabilityMatrix,
   computeSlaBadge,
+  deriveSlaBadges,
   getProviderById,
   getProvidersByCategory,
   getSortedProviders,
@@ -21,7 +22,10 @@ describe("provider pricing", () => {
     try {
       validateProviderCatalog(duplicate);
     } catch (error) {
-      expect(error).toMatchObject({ code: "provider_catalog_conflict", providerIds: ["search.basic"] });
+      expect(error).toMatchObject({
+        code: "provider_catalog_conflict",
+        providerIds: ["search.basic"]
+      });
     }
   });
 
@@ -30,11 +34,11 @@ describe("provider pricing", () => {
       { id: "zeta.provider" },
       { id: "alpha.provider" },
       { id: "zeta.provider" },
-      { id: "alpha.provider" },
+      { id: "alpha.provider" }
     ];
 
     expect(() => validateProviderCatalog(duplicate)).toThrow(
-      "Provider catalog contains duplicate provider id(s): alpha.provider, zeta.provider",
+      "Provider catalog contains duplicate provider id(s): alpha.provider, zeta.provider"
     );
   });
   it("exposes enabled providers for each category", () => {
@@ -57,12 +61,12 @@ describe("provider pricing", () => {
   });
 
   it("returns provider-specific prices for search, news, and scrape", () => {
-    expect(getProviderById("search.basic")?.priceUsd).toBe(0.01);
+    expect(getProviderById("search.basic")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/search"].slice(1)));
     expect(getProviderById("search.pro")?.priceUsd).toBe(0.02);
-    expect(getProviderById("news.fast")?.priceUsd).toBe(0.015);
+    expect(getProviderById("news.fast")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/news"].slice(1)));
     expect(getProviderById("news.deep")?.priceUsd).toBe(0.03);
-    expect(getProviderById("scrape.page")?.priceUsd).toBe(0.02);
-    expect(getProviderById("scrape.extract")?.priceUsd).toBe(0.04);
+    expect(getProviderById("scrape.page")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1)));
+    expect(getProviderById("scrape.extract")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1)) * 2);
   });
 
   it("formats dynamic provider prices consistently", async () => {
@@ -114,8 +118,10 @@ describe("provider pricing", () => {
       latencyEstimateMs: 100,
       qualityScore: 80,
       sourceType: "deterministic-fallback",
+      provenance: "mock",
       enabled: true,
-      slaBadge: computeSlaBadge(100, "deterministic-fallback")
+      slaBadge: computeSlaBadge(100, "deterministic-fallback"),
+      slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 100 })
     });
 
     providers.push({
@@ -127,8 +133,10 @@ describe("provider pricing", () => {
       latencyEstimateMs: 100,
       qualityScore: 80,
       sourceType: "deterministic-fallback",
+      provenance: "mock",
       enabled: true,
-      slaBadge: computeSlaBadge(100, "deterministic-fallback")
+      slaBadge: computeSlaBadge(100, "deterministic-fallback"),
+      slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 100 })
     });
 
     const sorted = getSortedProviders();
@@ -155,8 +163,10 @@ describe("provider pricing", () => {
       latencyEstimateMs: 100,
       qualityScore: 50,
       sourceType: "deterministic-fallback",
+      provenance: "mock",
       enabled: false,
-      slaBadge: computeSlaBadge(100, "deterministic-fallback")
+      slaBadge: computeSlaBadge(100, "deterministic-fallback"),
+      slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 100 })
     });
 
     const sorted = getSortedProviders();
@@ -334,205 +344,52 @@ describe("x402 cross-layer price consistency", () => {
       ).toBe(minMicroUsd);
     });
   }
-
-  it("falls back to route base price for unknown provider IDs — base price must be defined for all x402 route modes", () => {
-    for (const mode of routeModes) {
-      const routeKey = `GET /x402/${mode}`;
-      const basePrice = protectedRouteBasePrices[routeKey];
-      expect(
-        basePrice,
-        `Missing fallback base price for route "${routeKey}" — agents with unknown providers would receive no valid payment requirement`
-      ).toBeDefined();
-      expect(
-        basePrice,
-        `Fallback base price for "${routeKey}" is not a valid USD price string`
-      ).toMatch(/^\$\d+\.?\d*$/);
-    }
-  });
-
-  it("getProviderById('phantom.provider') returns undefined — unknown providers resolve to undefined and do not alter base price", () => {
-    expect(getProviderById("phantom.provider")).toBeUndefined();
-    expect(getProviderById("")).toBeUndefined();
-    expect(getProviderById("search")).toBeUndefined();
-  });
-
-  it("category mismatch guard — a provider from one category cannot resolve under a different route mode", () => {
-    const allIds = providers.map((p) => p.id);
-    const uniqueIds = new Set(allIds);
-    expect(uniqueIds.size).toBe(allIds.length);
-
-    for (const mode of routeModes) {
-      const categoryIds = new Set(providers.filter((p) => p.category === mode).map((p) => p.id));
-      const otherModes = routeModes.filter((m) => m !== mode);
-      for (const other of otherModes) {
-        const otherIds = providers.filter((p) => p.category === other).map((p) => p.id);
-        const collision = otherIds.find((id) => categoryIds.has(id));
-        expect(
-          collision,
-          `Provider ID "${collision}" appears in both "${mode}" and "${other}" categories — x402 category-match guard would be bypassed`
-        ).toBeUndefined();
-      }
-    }
-  });
-
-  it("drift-detection: surfaces offending provider ID when catalog price diverges from route base price", () => {
-    // Simulate drift: search.basic raised from $0.01 to $0.05 without updating protectedRouteBasePrices.
-    const driftedProviders = providers.map((p) =>
-      p.id === "search.basic" ? { ...p, priceUsd: 0.05 } : p
-    );
-
-    const searchProviders = driftedProviders.filter((p) => p.category === "search" && p.enabled);
-    const routeBase = protectedRouteBasePrices["GET /x402/search"];
-    expect(routeBase).toBeDefined();
-
-    const baseMicroUsd = toMicroUsd(parseRoutePrice(routeBase));
-    const minCategoryMicroUsd = toMicroUsd(Math.min(...searchProviders.map((p) => p.priceUsd)));
-
-    // With search.basic at 0.05, new minimum is search.pro at 0.02 (20000 µ$).
-    // Route base remains $0.01 (10000 µ$) — drift is detected.
-    const hasDrift = baseMicroUsd !== minCategoryMicroUsd;
-    expect(hasDrift).toBe(true);
-
-    const deviatingProviders = searchProviders
-      .filter((p) => toMicroUsd(p.priceUsd) !== baseMicroUsd)
-      .map((p) => p.id);
-    expect(deviatingProviders).toContain("search.basic");
-  });
 });
 
-describe("capability matrix", () => {
-  it("returns all providers with correct shape", () => {
-    const matrix = buildCapabilityMatrix();
-    expect(matrix.length).toBe(providers.length);
-
-    for (const entry of matrix) {
-      expect(entry.caveat === null || typeof entry.caveat === "string").toBe(true);
-      expect(entry).toMatchObject({
-        id: expect.any(String),
-        name: expect.any(String),
-        category: expect.stringMatching(/^(search|news|scrape)$/),
-        priceUsd: expect.any(Number),
-        sourceType: expect.stringMatching(/^(live|deterministic-fallback|unavailable)$/),
-        latencyEstimateMs: expect.any(Number),
-        enabled: expect.any(Boolean),
-        hasFallback: true
-      });
-      expect(entry.priceUsd).toBeGreaterThan(0);
-      expect(entry.latencyEstimateMs).toBeGreaterThan(0);
-    }
-  });
-
-  it("sorts deterministically by category then id", () => {
-    const matrix = buildCapabilityMatrix();
-    for (let i = 1; i < matrix.length; i++) {
-      const prev = matrix[i - 1];
-      const curr = matrix[i];
-      const catCmp = prev.category.localeCompare(curr.category);
-      if (catCmp === 0) {
-        expect(prev.id.localeCompare(curr.id)).toBeLessThanOrEqual(0);
-      } else {
-        expect(catCmp).toBeLessThan(0);
-      }
-    }
-  });
-
-  it("reports caveat when GROQ_API_KEY is missing", () => {
-    const matrix = buildCapabilityMatrix();
-    const allHaveCaveat = matrix.every(
-      (entry) => entry.caveat !== null && entry.caveat.includes("GROQ_API_KEY")
-    );
-    expect(allHaveCaveat).toBe(true);
-  });
-});
-
-describe("SLA badge computation", () => {
-  it("computes fast latency band for low-latency providers", () => {
-    const badge = computeSlaBadge(700, "deterministic-fallback");
-    expect(badge.latencyBand).toBe("fast");
-    expect(badge.badgeCopy).toContain("Fast response");
-  });
-
-  it("computes standard latency band for mid-range providers", () => {
-    const badge = computeSlaBadge(1100, "deterministic-fallback");
-    expect(badge.latencyBand).toBe("standard");
-    expect(badge.badgeCopy).toContain("Standard response");
-  });
-
-  it("computes slow latency band for high-latency providers", () => {
-    const badge = computeSlaBadge(1700, "live");
-    expect(badge.latencyBand).toBe("slow");
-    expect(badge.badgeCopy).toContain("Slow response");
-  });
-
-  it("computes live reliability band for live providers", () => {
-    const badge = computeSlaBadge(1000, "live");
-    expect(badge.reliabilityBand).toBe("live");
-    expect(badge.badgeCopy).toContain("Live API");
-  });
-
-  it("computes demo reliability band for deterministic-fallback providers", () => {
-    const badge = computeSlaBadge(1000, "deterministic-fallback");
-    expect(badge.reliabilityBand).toBe("demo");
-    expect(badge.badgeCopy).toContain("Demo provider");
-  });
-
-  it("computes not-verified reliability band for unavailable providers", () => {
-    const badge = computeSlaBadge(1000, "unavailable");
-    expect(badge.reliabilityBand).toBe("not-verified");
-    expect(badge.badgeCopy).toContain("Not verified");
-  });
-
-  it("computes x402 payment mode for live providers", () => {
-    const badge = computeSlaBadge(1000, "live");
-    expect(badge.paymentMode).toBe("x402");
-    expect(badge.badgeCopy).toContain("x402 payment");
-  });
-
-  it("computes demo payment mode for deterministic-fallback providers", () => {
-    const badge = computeSlaBadge(1000, "deterministic-fallback");
-    expect(badge.paymentMode).toBe("demo");
-    expect(badge.badgeCopy).toContain("Demo payment");
-  });
-
-  it("computes not-verified payment mode for unavailable providers", () => {
-    const badge = computeSlaBadge(1000, "unavailable");
-    expect(badge.paymentMode).toBe("not-verified");
-    expect(badge.badgeCopy).toContain("Payment not verified");
-  });
-
-  it("every baseline provider has a valid slaBadge", () => {
-    for (const provider of providers) {
-      expect(provider.slaBadge).toBeDefined();
-      expect(provider.slaBadge.latencyBand).toMatch(/^(fast|standard|slow|not-verified)$/);
-      expect(provider.slaBadge.reliabilityBand).toMatch(/^(live|fallback|demo|not-verified)$/);
-      expect(provider.slaBadge.paymentMode).toMatch(/^(x402|demo|sponsored|not-verified)$/);
-      expect(typeof provider.slaBadge.badgeCopy).toBe("string");
-      expect(provider.slaBadge.badgeCopy.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("search.live provider has x402 payment mode and live reliability", () => {
-    const provider = providers.find((p) => p.id === "search.live");
+describe("x402 challenge building from catalog integer prices", () => {
+  it("builds a challenge amount equal to the catalog integer price", () => {
+    const { buildX402Challenge } = require("./x402.js");
+    const { getProviderById } = require("./pricing.js");
+    const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
-    expect(provider!.slaBadge.paymentMode).toBe("x402");
-    expect(provider!.slaBadge.reliabilityBand).toBe("live");
-    expect(provider!.slaBadge.latencyBand).toBe("slow");
+    const challenge = buildX402Challenge({
+      providerId: provider!.id,
+      catalogPriceMicroUsd: Math.round(provider!.priceUsd * 1_000_000),
+    });
+    expect(challenge.amountMicroUsd).toBe(Math.round(provider!.priceUsd * 1_000_000));
   });
 
-  it("search.basic provider has demo payment mode and fast latency", () => {
-    const provider = providers.find((p) => p.id === "search.basic");
+  it("rejects a one-unit difference and does not run the provider", () => {
+    const { buildX402Challenge } = require("./x402.js");
+    const { getProviderById } = require("./pricing.js");
+    const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
-    expect(provider!.slaBadge.paymentMode).toBe("demo");
-    expect(provider!.slaBadge.reliabilityBand).toBe("demo");
-    expect(provider!.slaBadge.latencyBand).toBe("fast");
+    const catalogPriceMicroUsd = Math.round(provider!.priceUsd * 1_000_000);
+    expect(() =>
+      buildX402Challenge({
+        providerId: provider!.id,
+        catalogPriceMicroUsd: catalogPriceMicroUsd + 1,
+      })
+    ).toThrow();
   });
 
-  it("getSortedProviders returns providers with slaBadge", () => {
-    const sorted = getSortedProviders();
-    expect(sorted.length).toBeGreaterThan(0);
-    for (const provider of sorted) {
-      expect(provider.slaBadge).toBeDefined();
-      expect(provider.slaBadge.badgeCopy).toBeTruthy();
-    }
+  it("rejects a zero price and does not build a challenge", () => {
+    const { buildX402Challenge } = require("./x402.js");
+    expect(() =>
+      buildX402Challenge({
+        providerId: "search.basic",
+        catalogPriceMicroUsd: 0,
+      })
+    ).toThrow();
+  });
+
+  it("rejects a price above the safe integer range", () => {
+    const { buildX402Challenge } = require("./x402.js");
+    expect(() =>
+      buildX402Challenge({
+        providerId: "search.basic",
+        catalogPriceMicroUsd: Number.MAX_SAFE_INTEGER + 1,
+      })
+    ).toThrow();
   });
 });

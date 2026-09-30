@@ -3,10 +3,15 @@ import { promises as dns } from "dns";
 
 const BLOCKED_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
 
-const BLOCKED_PREFIXES = [
+const BLOCKED_PREFIXES: string[] = [
+  // IPv4 loopback
   "127.",
+  // IPv4 link-local
+  "169.254.",
+  // IPv4 private
   "10.",
   "192.168.",
+  // 172.16.0.0/12
   "172.16.",
   "172.17.",
   "172.18.",
@@ -23,10 +28,12 @@ const BLOCKED_PREFIXES = [
   "172.29.",
   "172.30.",
   "172.31.",
-  "169.254.",
-  "fc00:",
-  "fd00:",
-  "fe80:"
+  // IPv6 loopback/link-local/private
+  "::1",
+  "fec0",
+  "fe80",
+  "fc00",
+  "fd00"
 ];
 
 const BLOCKED_CLOUD_META = ["169.254.169.254", "[fd00:ec2::254]"];
@@ -48,11 +55,36 @@ export interface UrlPolicyResult {
   error?: string;
 }
 
+function normalizeHostname(hostname: string): string {
+  const lower = hostname.toLowerCase();
+  return lower.startsWith("[") ? lower.slice(1, -1) : lower;
+}
+
+function isBlockedAddress(address: string): boolean {
+  const normalized = normalizeHostname(address);
+
+  if (BLOCKED_HOSTS.has(address.toLowerCase()) || BLOCKED_HOSTS.has(normalized)) {
+    return true;
+  }
+
+  if (BLOCKED_CLOUD_META.includes(address.toLowerCase()) || BLOCKED_CLOUD_META.includes(normalized)) {
+    return true;
+  }
+
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function validateUrl(raw: string): UrlPolicyResult {
   try {
     const url = new URL(raw);
 
-    if (!["http:", "https:"].includes(url.protocol)) {
+    if (!["http:", "https::"].includes(url.protocol)) {
       return { safe: false, sanitizedUrl: "", error: "Only HTTP/HTTPS protocols are allowed" };
     }
 
@@ -63,16 +95,14 @@ export function validateUrl(raw: string): UrlPolicyResult {
     const hostname = url.hostname.toLowerCase();
     // IPv6 hostnames include brackets (e.g. "[fe80::1]"); strip them so prefix
     // checks match the address portion.
-    const normalizedHostname = hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
+    const normalizedHostname = normalizeHostname(hostname);
 
     if (BLOCKED_HOSTS.has(hostname) || BLOCKED_CLOUD_META.includes(hostname)) {
       return { safe: false, sanitizedUrl: "", error: "URL targets a blocked host" };
     }
 
-    for (const prefix of BLOCKED_PREFIXES) {
-      if (normalizedHostname.startsWith(prefix)) {
-        return { safe: false, sanitizedUrl: "", error: "URL targets a private/restricted network" };
-      }
+    if (isBlockedAddress(normalizedHostname)) {
+      return { safe: false, sanitizedUrl: "", error: "URL targets a private/restricted network" };
     }
 
     const sanitized = url.protocol + "//" + url.hostname + url.pathname + url.search;
@@ -92,12 +122,7 @@ export async function resolveAndValidate(raw: string): Promise<UrlPolicyResult> 
     const addresses = await dns.resolve(hostname);
 
     for (const addr of addresses) {
-      for (const prefix of BLOCKED_PREFIXES) {
-        if (addr.startsWith(prefix)) {
-          return { safe: false, sanitizedUrl: "", error: "DNS resolved to a blocked address" };
-        }
-      }
-      if (BLOCKED_HOSTS.has(addr) || BLOCKED_CLOUD_META.includes(addr)) {
+      if (isBlockedAddress(addr)) {
         return { safe: false, sanitizedUrl: "", error: "DNS resolved to a blocked address" };
       }
     }

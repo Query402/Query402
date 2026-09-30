@@ -20,8 +20,20 @@ export type IdempotencyAcquireResult =
   | { state: "in_progress" }
   | { state: "conflict" };
 
+export type PaymentProofLookup =
+  | { hit: true; body: unknown }
+  | { hit: false; conflict?: boolean };
+
 function ttlSeconds() {
   return config.IDEMPOTENCY_TTL_SECONDS;
+}
+
+function ensurePaymentProofHashColumn(): void {
+  const database = getSponsorshipDb();
+  const columns = database.prepare(`PRAGMA table_info(payment_proofs)`).all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "request_hash")) {
+    database.exec(`ALTER TABLE payment_proofs ADD COLUMN request_hash TEXT NOT NULL DEFAULT ''`);
+  }
 }
 
 export function isIdempotencyStorageAvailable(): boolean {
@@ -31,6 +43,32 @@ export function isIdempotencyStorageAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+function isPending(statusCode: number): boolean {
+  return statusCode <= PENDING_STATUS_CODE;
+}
+
+/**
+ * Expire completed records past TTL. In-flight (pending) locks are retained so
+ * a slow provider call is not dropped mid-flight.
+ */
+function deleteIfExpiredCompleted(
+  database: ReturnType<typeof getSponsorshipDb>,
+  key: string,
+  statusCode: number,
+  expiresAt: string
+): boolean {
+  if (new Date(expiresAt).getTime() > Date.now()) {
+    return false;
+  }
+
+  if (isPending(statusCode)) {
+    return false;
+  }
+
+  database.prepare(`DELETE FROM idempotency_keys WHERE key = ?`).run(key);
+  return true;
 }
 
 export function acquireIdempotencyLock(
@@ -56,17 +94,36 @@ export function acquireIdempotencyLock(
     | undefined;
 
   if (existing) {
-    if (new Date(existing.expires_at).getTime() <= Date.now()) {
-      database.prepare(`DELETE FROM idempotency_keys WHERE key = ?`).run(key);
-    } else if (existing.request_hash !== requestHash) {
-      return { state: "conflict" };
-    } else if (existing.status_code > PENDING_STATUS_CODE) {
-      return {
-        state: "cached",
-        statusCode: existing.status_code,
-        body: JSON.parse(existing.response_json) as unknown
-      };
-    } else {
+    const removed = deleteIfExpiredCompleted(
+      database,
+      key,
+      existing.status_code,
+      existing.expires_at
+    );
+
+    if (!removed) {
+      if (existing.request_hash !== requestHash) {
+        return { state: "conflict" };
+      }
+
+      if (!isPending(existing.status_code)) {
+        return {
+          state: "cached",
+          statusCode: existing.status_code,
+          body: JSON.parse(existing.response_json) as unknown
+        };
+      }
+
+      // In-flight lock: refresh the TTL instead of letting the record expire,
+      // so a slow request cannot be taken over and executed twice.
+      const refreshedExpiry = new Date(Date.now() + ttl * 1000).toISOString();
+      database
+        .prepare(
+          `UPDATE idempotency_keys
+           SET expires_at = ?
+           WHERE key = ? AND status_code = ?`
+        )
+        .run(refreshedExpiry, key, PENDING_STATUS_CODE);
       return { state: "in_progress" };
     }
   }
@@ -116,8 +173,16 @@ export function getCachedIdempotencyResponse(
     return { hit: false };
   }
 
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    database.prepare(`DELETE FROM idempotency_keys WHERE key = ?`).run(key);
+  if (deleteIfExpiredCompleted(database, key, row.status_code, row.expires_at)) {
+    return { hit: false };
+  }
+
+  // In-flight past TTL is still held — never treat as a cache miss that would
+  // allow a second provider call under the same key.
+  if (isPending(row.status_code) && new Date(row.expires_at).getTime() <= Date.now()) {
+    if (row.request_hash !== requestHash) {
+      return { hit: false, conflict: true };
+    }
     return { hit: false };
   }
 
@@ -125,7 +190,7 @@ export function getCachedIdempotencyResponse(
     return { hit: false, conflict: true };
   }
 
-  if (row.status_code <= PENDING_STATUS_CODE) {
+  if (isPending(row.status_code)) {
     return { hit: false };
   }
 
@@ -159,26 +224,42 @@ export function cacheIdempotencyResponse(
     .run(key, requestHash, JSON.stringify(body), statusCode, expiresAt);
 }
 
-export function getResponseByPaymentProof(transactionHash: string): unknown | null {
+export function getResponseByPaymentProof(
+  transactionHash: string,
+  requestHash?: string
+): PaymentProofLookup {
+  ensurePaymentProofHashColumn();
   const database = getSponsorshipDb();
   const row = database
-    .prepare(`SELECT response_json FROM payment_proofs WHERE transaction_hash = ?`)
-    .get(transactionHash) as { response_json: string } | undefined;
+    .prepare(`SELECT response_json, request_hash FROM payment_proofs WHERE transaction_hash = ?`)
+    .get(transactionHash) as { response_json: string; request_hash: string } | undefined;
 
   if (!row) {
-    return null;
+    return { hit: false };
   }
 
-  return JSON.parse(row.response_json) as unknown;
+  if (requestHash !== undefined && row.request_hash && row.request_hash !== requestHash) {
+    return { hit: false, conflict: true };
+  }
+
+  return {
+    hit: true,
+    body: JSON.parse(row.response_json) as unknown
+  };
 }
 
-export function savePaymentProofResponse(transactionHash: string, body: unknown): void {
+export function savePaymentProofResponse(
+  transactionHash: string,
+  body: unknown,
+  requestHash = ""
+): void {
+  ensurePaymentProofHashColumn();
   const database = getSponsorshipDb();
   database
     .prepare(
-      `INSERT INTO payment_proofs (transaction_hash, response_json, created_at)
-       VALUES (?, ?, ?)
+      `INSERT INTO payment_proofs (transaction_hash, response_json, created_at, request_hash)
+       VALUES (?, ?, ?, ?)
        ON CONFLICT(transaction_hash) DO NOTHING`
     )
-    .run(transactionHash, JSON.stringify(body), new Date().toISOString());
+    .run(transactionHash, JSON.stringify(body), new Date().toISOString(), requestHash);
 }

@@ -60,9 +60,9 @@ Records expire after TTL; expired keys allow a fresh execution.
 
 ## Client usage
 
-**Web (wallet):** `apps/web/src/lib/idempotency.ts` — stable key per route + inputs + payer.
+**Web (wallet):** `apps/web/src/lib/idempotency.ts` — key derived from route + provider + normalized query input + payment reference (the payer wallet address for x402). Sent only on the protected `/x402/*` routes; `apps/web/src/lib/api.ts` refuses to attach the key or any payment header to a public path.
 
-**Web (sponsored):** same helper on `POST /api/paid/run`.
+**Web (sponsored):** same derivation on `POST /api/paid/run`, with the single-use grant nonce as the payment reference — a fresh grant never reuses a previous key.
 
 **Agent:** `apps/agent-client/src/idempotency.ts` — same pattern on x402 GET.
 

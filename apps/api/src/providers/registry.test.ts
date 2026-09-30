@@ -1,32 +1,46 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { DefaultProviderRegistry } from "./registry.js";
 import { ProviderAdapter } from "./core.js";
 
 // Ensure pricing data exists for our fake tests so getProviderById works
-import { providers, computeSlaBadge } from "../lib/pricing.js";
-providers.push({
-  id: "test.search.live",
-  name: "Test Live Search",
-  category: "search",
-  priceUsd: 0.05,
-  description: "Test live search",
-  latencyEstimateMs: 100,
-  qualityScore: 90,
-  sourceType: "live",
-  provenance: "live" as const,
-  enabled: true
-});
-providers.push({
-  id: "test.search.deterministic",
-  name: "Test Deterministic Search",
-  category: "search",
-  priceUsd: 0.05,
-  description: "Test mock search",
-  latencyEstimateMs: 100,
-  qualityScore: 90,
-  sourceType: "deterministic-fallback",
-  provenance: "fallback" as const,
-  enabled: true
+import { providers, getProviderById, computeSlaBadge, deriveSlaBadges } from "../lib/pricing.js";
+
+const TEST_PROVIDER_PRICE_USD_CURRENCY = 0.05;
+const TEST_PROVIDER_PRICE_INTEGER = 5;
+
+beforeAll(() => {
+  if (!providers.some((p) => p.id === "test.search.live")) {
+    providers.push({
+      id: "test.search.live",
+      name: "Test Live Search",
+      category: "search",
+      priceUsd: TEST_PROVIDER_PRICE_USD_CURRENCY,
+      description: "Test live search",
+      latencyEstimateMs: 100,
+      qualityScore: 90,
+      sourceType: "live",
+      provenance: "live" as const,
+      enabled: true,
+      slaBadge: computeSlaBadge(100, "live"),
+      slaBadges: deriveSlaBadges({ sourceType: "live", latencyEstimateMs: 100 })
+    });
+  }
+  if (!providers.some((p) => p.id === "test.search.deterministic")) {
+    providers.push({
+      id: "test.search.deterministic",
+      name: "Test Deterministic Search",
+      category: "search",
+      priceUsd: TEST_PROVIDER_PRICE_USD_CURRENCY,
+      description: "Test mock search",
+      latencyEstimateMs: 100,
+      qualityScore: 90,
+      sourceType: "deterministic-fallback",
+      provenance: "fallback" as const,
+      enabled: true,
+      slaBadge: computeSlaBadge(100, "deterministic-fallback"),
+      slaBadges: deriveSlaBadges({ sourceType: "deterministic-fallback", latencyEstimateMs: 100 })
+    });
+  }
 });
 
 class MockAdapter implements ProviderAdapter {
@@ -175,5 +189,16 @@ describe("ProviderRegistry", () => {
     res = await registry.execute("search", "test.search.live", "test-query");
     expect(res.source).toBe("deterministic-fallback");
     expect(adapter.callCount).toBe(3);
+  });
+
+  it("rejects a one-unit difference and does not run the provider", async () => {
+    const registry = new DefaultProviderRegistry();
+    const adapter = new MockAdapter("test.search.live");
+    registry.register(adapter);
+
+    await expect(
+      registry.execute("search", "test.search.live", "test-query", TEST_PROVIDER_PRICE_INTEGER + 1)
+    ).rejects.toThrow(/challenge amount/);
+    expect(adapter.callCount).toBe(0);
   });
 });

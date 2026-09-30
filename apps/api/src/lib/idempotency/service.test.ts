@@ -52,15 +52,39 @@ describe("idempotency service", () => {
     nowSpy.mockRestore();
   });
 
-  it("deduplicates payment proof responses", async () => {
+  it("deduplicates payment proof responses for the same request hash", async () => {
     dbPath = applySponsorshipTestEnv();
     const { getResponseByPaymentProof, savePaymentProofResponse } = await import("./service.js");
 
     const transactionHash = `tx_${randomUUID()}`;
     const body = { result: { traceId: "trace-proof" } };
+    const requestHash = "hash-proof-a";
 
-    expect(getResponseByPaymentProof(transactionHash)).toBeNull();
-    savePaymentProofResponse(transactionHash, body);
-    expect(getResponseByPaymentProof(transactionHash)).toEqual(body);
+    expect(getResponseByPaymentProof(transactionHash, requestHash)).toEqual({ hit: false });
+    savePaymentProofResponse(transactionHash, body, requestHash);
+    expect(getResponseByPaymentProof(transactionHash, requestHash)).toEqual({ hit: true, body });
+    expect(getResponseByPaymentProof(transactionHash, "hash-proof-b")).toEqual({
+      hit: false,
+      conflict: true
+    });
+  });
+
+  it("does not expire an in-flight lock past TTL", async () => {
+    dbPath = applySponsorshipTestEnv({ IDEMPOTENCY_TTL_SECONDS: "1" });
+    const { acquireIdempotencyLock, getCachedIdempotencyResponse } = await import("./service.js");
+
+    const key = randomUUID();
+    const requestHash = "hash-inflight";
+
+    expect(acquireIdempotencyLock(key, requestHash, 1).state).toBe("acquired");
+
+    const expiredAt = Date.now() + 1_100;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(expiredAt);
+
+    expect(getCachedIdempotencyResponse(key, requestHash)).toEqual({ hit: false });
+    expect(acquireIdempotencyLock(key, requestHash, 1).state).toBe("in_progress");
+    expect(acquireIdempotencyLock(key, "hash-other", 1).state).toBe("conflict");
+
+    nowSpy.mockRestore();
   });
 });

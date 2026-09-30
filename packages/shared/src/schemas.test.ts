@@ -1,16 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   latencyBandSchema,
+  MICRO_USD_PER_USD,
   newsQuerySchema,
+  paymentChallengeSchema,
+  paymentLinkAmountSchema,
+  paymentLinkAssetSchema,
+  paymentLinkDestinationSchema,
+  paymentLinkInputSchema,
+  paymentLinkNetworkSchema,
   paymentModeSchema,
   providerCategorySchema,
   providerSchema,
   query402ReceiptSchema,
   queryModeSchema,
+  quoteBindErrorCodeSchema,
   receiptEvidenceKindSchema,
   receiptPaymentModeSchema,
   receiptPaymentStatusSchema,
   reliabilityBandSchema,
+  requestedQuoteSchema,
   scrapeQuerySchema,
   searchQuerySchema,
   signedGrantSchema,
@@ -199,6 +208,100 @@ describe("sponsorshipChallengeSchema", () => {
   });
 });
 
+const validPaymentLinkInput = {
+  amount: 50_000,
+  asset: "USDC",
+  destination: `G${"A".repeat(55)}`,
+  network: "stellar:testnet"
+};
+
+describe("MICRO_USD_PER_USD", () => {
+  it("defines one million micro-USD units per USD", () => {
+    expect(MICRO_USD_PER_USD).toBe(1_000_000);
+  });
+});
+
+describe("paymentLinkAmountSchema", () => {
+  it("accepts a positive integer micro-USD amount", () => {
+    expect(paymentLinkAmountSchema.parse(50_000)).toBe(50_000);
+    expect(paymentLinkAmountSchema.parse(1)).toBe(1);
+  });
+
+  it("rejects a zero amount", () => {
+    expect(paymentLinkAmountSchema.safeParse(0).success).toBe(false);
+  });
+
+  it("rejects a negative amount", () => {
+    expect(paymentLinkAmountSchema.safeParse(-1).success).toBe(false);
+  });
+
+  it("rejects a non-integer amount", () => {
+    expect(paymentLinkAmountSchema.safeParse(0.01).success).toBe(false);
+    expect(paymentLinkAmountSchema.safeParse(50_000.5).success).toBe(false);
+  });
+
+  it("rejects a float imprecision artifact", () => {
+    expect(paymentLinkAmountSchema.safeParse(0.1 + 0.2).success).toBe(false);
+  });
+
+  it("rejects non-finite numbers", () => {
+    expect(paymentLinkAmountSchema.safeParse(Number.NaN).success).toBe(false);
+    expect(paymentLinkAmountSchema.safeParse(Number.POSITIVE_INFINITY).success).toBe(false);
+  });
+
+  it("rejects an amount beyond the safe integer range", () => {
+    expect(paymentLinkAmountSchema.safeParse(Number.MAX_SAFE_INTEGER + 1).success).toBe(false);
+  });
+});
+
+describe("paymentLinkAssetSchema", () => {
+  it("accepts an uppercase asset code", () => {
+    expect(paymentLinkAssetSchema.parse("USDC")).toBe("USDC");
+  });
+
+  it("rejects a lowercase asset code", () => {
+    expect(paymentLinkAssetSchema.safeParse("usdc").success).toBe(false);
+  });
+
+  it("rejects an empty or oversized asset code", () => {
+    expect(paymentLinkAssetSchema.safeParse("").success).toBe(false);
+    expect(paymentLinkAssetSchema.safeParse("A".repeat(13)).success).toBe(false);
+  });
+});
+
+describe("paymentLinkDestinationSchema", () => {
+  it("requires a Stellar public key", () => {
+    expect(paymentLinkDestinationSchema.parse(`G${"A".repeat(55)}`)).toBe(`G${"A".repeat(55)}`);
+    expect(paymentLinkDestinationSchema.safeParse("not-a-destination").success).toBe(false);
+    expect(paymentLinkDestinationSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("paymentLinkNetworkSchema", () => {
+  it("accepts a namespaced network", () => {
+    expect(paymentLinkNetworkSchema.parse("stellar:testnet")).toBe("stellar:testnet");
+    expect(paymentLinkNetworkSchema.parse("stellar:pubnet")).toBe("stellar:pubnet");
+  });
+
+  it("rejects a non-namespaced network", () => {
+    expect(paymentLinkNetworkSchema.safeParse("testnet").success).toBe(false);
+    expect(paymentLinkNetworkSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("paymentLinkInputSchema", () => {
+  it("accepts a valid payment-link input", () => {
+    expect(paymentLinkInputSchema.parse(validPaymentLinkInput)).toEqual(validPaymentLinkInput);
+  });
+
+  it("rejects when any field is missing", () => {
+    for (const field of ["amount", "asset", "destination", "network"] as const) {
+      const { [field]: _omitted, ...rest } = validPaymentLinkInput;
+      expect(paymentLinkInputSchema.safeParse(rest).success).toBe(false);
+    }
+  });
+});
+
 describe("receiptPaymentModeSchema", () => {
   it("accepts the supported payment modes", () => {
     expect(receiptPaymentModeSchema.parse("wallet")).toBe("wallet");
@@ -309,5 +412,39 @@ describe("query402ReceiptSchema", () => {
   it("rejects receipts missing the schema literal", () => {
     const { schema: _ignored, ...withoutSchema } = baseReceipt;
     expect(query402ReceiptSchema.safeParse(withoutSchema).success).toBe(false);
+  });
+});
+
+describe("requestedQuoteSchema / paymentChallengeSchema", () => {
+  const quote = {
+    provider: "search.basic",
+    amount: "100000",
+    asset: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    network: "stellar:testnet"
+  };
+
+  it("accepts a requested quote", () => {
+    expect(requestedQuoteSchema.parse(quote)).toEqual(quote);
+  });
+
+  it("accepts a challenge with optional expiry", () => {
+    expect(
+      paymentChallengeSchema.parse({
+        ...quote,
+        expiresAt: "2099-01-01T00:00:00.000Z"
+      })
+    ).toMatchObject({ expiresAt: "2099-01-01T00:00:00.000Z" });
+  });
+
+  it("rejects incomplete quotes", () => {
+    expect(requestedQuoteSchema.safeParse({ ...quote, amount: "" }).success).toBe(false);
+  });
+});
+
+describe("quoteBindErrorCodeSchema", () => {
+  it("accepts the supported bind error codes", () => {
+    expect(quoteBindErrorCodeSchema.parse("challenge_mismatch")).toBe("challenge_mismatch");
+    expect(quoteBindErrorCodeSchema.parse("challenge_expired")).toBe("challenge_expired");
+    expect(quoteBindErrorCodeSchema.parse("challenge_empty")).toBe("challenge_empty");
   });
 });

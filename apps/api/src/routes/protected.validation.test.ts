@@ -19,8 +19,13 @@ vi.mock("../lib/persistence.js", () => ({
 }));
 
 vi.mock("../lib/idempotency/service.js", () => ({
-  getResponseByPaymentProof: vi.fn().mockReturnValue(null),
-  savePaymentProofResponse: vi.fn()
+  getResponseByPaymentProof: vi.fn().mockReturnValue({ hit: false }),
+  savePaymentProofResponse: vi.fn(),
+  isIdempotencyStorageAvailable: vi.fn().mockReturnValue(true),
+  acquireIdempotencyLock: vi.fn().mockReturnValue({ state: "acquired" }),
+  getCachedIdempotencyResponse: vi.fn().mockReturnValue({ hit: false }),
+  cacheIdempotencyResponse: vi.fn(),
+  releaseIdempotencyLock: vi.fn()
 }));
 
 function mockQueryResult(mode: string, providerId: string, priceUsd: number) {
@@ -552,10 +557,12 @@ describe("x402 payment header presence validation - non-demo routes", () => {
   it("does not enforce payment headers on non-protected routes", async () => {
     const { publicRouter } = await import("../routes/public.js");
     const app = express();
-    app.use(await (async () => {
-      const { createX402Middleware } = await import("../lib/x402.js");
-      return createX402Middleware();
-    })());
+    app.use(
+      await (async () => {
+        const { createX402Middleware } = await import("../lib/x402.js");
+        return createX402Middleware();
+      })()
+    );
     app.use(publicRouter);
 
     const response = await request(app).get("/health");

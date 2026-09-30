@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { UsageEvent, PaymentAttempt } from "@query402/shared";
-import { getPublicAnalytics, getDetailedAnalytics } from "./analytics-service";
+import { getPublicAnalytics, getDetailedAnalytics } from "./analytics-service.js";
 
 /**
  * Integration tests for security and privacy guarantees
@@ -9,7 +9,7 @@ import { getPublicAnalytics, getDetailedAnalytics } from "./analytics-service";
 
 describe("Analytics - Security and Privacy Integration", () => {
   function createMockUsageEvent(overrides: Partial<UsageEvent> = {}): UsageEvent {
-    const baseTime = new Date("2024-01-15T10:00:00Z").toISOString();
+    const baseTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     return {
       id: `use_${Math.random().toString(36).slice(2)}`,
       mode: "search",
@@ -30,7 +30,7 @@ describe("Analytics - Security and Privacy Integration", () => {
   }
 
   function createMockPayment(overrides: Partial<PaymentAttempt> = {}): PaymentAttempt {
-    const baseTime = new Date("2024-01-15T10:00:00Z").toISOString();
+    const baseTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     return {
       id: `pay_${Math.random().toString(36).slice(2)}`,
       endpoint: "/x402/search",
@@ -92,7 +92,9 @@ describe("Analytics - Security and Privacy Integration", () => {
       const responseJson = JSON.stringify(result);
 
       // Full address should not be present
-      expect(responseJson).not.toContain("GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ");
+      expect(responseJson).not.toContain(
+        "GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ"
+      );
     });
 
     it("should not expose facilitator URLs", () => {
@@ -186,7 +188,12 @@ describe("Analytics - Security and Privacy Integration", () => {
         })
       ];
 
-      const result = getDetailedAnalytics(usage, [], {}, { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 });
+      const result = getDetailedAnalytics(
+        usage,
+        [],
+        {},
+        { retentionDays: 90, maxPageLimit: 100, defaultPageLimit: 20 }
+      );
 
       expect(result.records[0].paymentTxHash).toBeUndefined();
     });
@@ -252,7 +259,9 @@ describe("Analytics - Security and Privacy Integration", () => {
 
       // Verify none of the sensitive data appears
       expect(responseJson).not.toContain("DELETE FROM audit_logs");
-      expect(responseJson).not.toContain("GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ");
+      expect(responseJson).not.toContain(
+        "GBLL3LQVV3LYQKPYQ4H7KOCDT5TJFP4P4A5PEHQMWQ6WBSOVNBFPGJPZ"
+      );
       expect(responseJson).not.toContain("internal.secret.local");
       expect(responseJson).not.toContain("secret_tx_data");
     });

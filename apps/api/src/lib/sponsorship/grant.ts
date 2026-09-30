@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SignedGrant, SponsorshipGrant } from "@query402/shared";
 import { config } from "../config.js";
+import { grantWithDebit } from "./budget.js";
 
 function serializeGrant(grant: SponsorshipGrant): string {
   return [
@@ -47,17 +48,42 @@ export function verifyGrant(signed: SignedGrant): boolean {
   }
 }
 
-export function issueGrant(wallet: string): SignedGrant {
+export interface IssueGrantInput {
+  wallet: string;
+  /** Amount the policy preview authorized. When provided, the grant debit is
+   * applied in the same transaction as the grant write and must match the
+   * grant's max amount. */
+  previewAmountUsd?: number;
+  /** Optional nonce override; defaults to a fresh UUID. */
+  nonce?: string;
+  /** Optional grant id override; defaults to a fresh UUID. */
+  grantId?: string;
+}
+
+export function issueGrant(walletOrInput: string | IssueGrantInput): SignedGrant {
+  const input: IssueGrantInput =
+    typeof walletOrInput === "string" ? { wallet: walletOrInput } : walletOrInput;
+
   const now = new Date();
   const grant: SponsorshipGrant = {
-    grantId: randomUUID(),
-    wallet,
+    grantId: input.grantId ?? randomUUID(),
+    wallet: input.wallet,
     network: config.STELLAR_NETWORK,
     maxAmountUsd: config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD,
     expiresAt: new Date(now.getTime() + config.SPONSORSHIP_GRANT_TTL_SECONDS * 1000).toISOString(),
-    nonce: randomUUID(),
+    nonce: input.nonce ?? randomUUID(),
     issuedAt: now.toISOString()
   };
+
+  if (input.previewAmountUsd !== undefined) {
+    grantWithDebit({
+      wallet: grant.wallet,
+      amountUsd: grant.maxAmountUsd,
+      nonce: grant.nonce,
+      grantId: grant.grantId,
+      previewAmountUsd: input.previewAmountUsd
+    });
+  }
 
   return signGrant(grant);
 }

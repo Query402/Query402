@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { getProviderById } from "../pricing.js";
 import { wouldExceedBudget } from "./budget.js";
 import { getDailyWindowStart } from "./budget.js";
+import { getRemainingBudget } from "./budget.js";
 import { getSponsorshipDb } from "./store.js";
 import { issueGrant, verifyGrant } from "./grant.js";
 import { isSponsorshipStorageAvailable } from "./store.js";
@@ -69,6 +70,32 @@ function checkBudget(wallet: string, amountUsd: number, grantId: string): Policy
   }
 }
 
+function checkBudgetAgreement(
+  wallet: string,
+  amountUsd: number,
+  grantId: string
+): PolicyResult | null {
+  try {
+    const remaining = getRemainingBudget(wallet);
+
+    if (remaining === null) {
+      return deny("denied_storage_unavailable", 503, "sponsorship_storage_unavailable", {
+        grantId
+      });
+    }
+
+    if (amountUsd > remaining) {
+      return deny("denied_budget_exceeded", 429, "wallet_budget_exceeded", { grantId });
+    }
+
+    return null;
+  } catch {
+    return deny("denied_storage_unavailable", 503, "sponsorship_storage_unavailable", {
+      grantId
+    });
+  }
+}
+
 export function authorizeSponsoredRun(input: AuthorizeSponsoredRunInput): PolicyResult {
   if (!config.sponsorshipEnabled) {
     return deny("denied_sponsorship_disabled", 503, "sponsorship_disabled");
@@ -120,6 +147,11 @@ export function authorizeSponsoredRun(input: AuthorizeSponsoredRunInput): Policy
   const budgetResult = checkBudget(grant.wallet, provider.priceUsd, grant.grantId);
   if (budgetResult) {
     return budgetResult;
+  }
+
+  const agreementResult = checkBudgetAgreement(grant.wallet, provider.priceUsd, grant.grantId);
+  if (agreementResult) {
+    return agreementResult;
   }
 
   return {
