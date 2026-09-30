@@ -1,30 +1,17 @@
-const idempotencyKeys = new Map<string, string>();
+import { createHash } from 'crypto';
 
-export function buildPaidClientRequestKey(input: {
-  route: string;
-  mode: string;
-  provider: string;
-  query?: string;
-  url?: string;
-  payer: string;
-}) {
-  return JSON.stringify({
-    route: input.route,
-    mode: input.mode,
-    provider: input.provider,
-    query: input.query ?? null,
-    url: input.url ?? null,
-    payer: input.payer
-  });
+const PROVIDER_SALT = process.env.PROVIDER_SALT || 'default-salt';
+
+export function deriveIdempotencyKey(
+  provider: string,
+  query: string,
+  paymentReference: string
+): string {
+  const input = `${PROVIDER_SALT}:${provider}:${query}:${paymentReference}`;
+  return createHash('sha256').update(input).digest('hex');
 }
 
-export function getIdempotencyKey(requestKey: string): string {
-  const existing = idempotencyKeys.get(requestKey);
-  if (existing) {
-    return existing;
-  }
-
-  const key = crypto.randomUUID();
-  idempotencyKeys.set(requestKey, key);
-  return key;
+export function isProtectedRoute(path: string): boolean {
+  const protectedRoutes = ['/api/query', '/api/payment'];
+  return protectedRoutes.some((route) => path.startsWith(route));
 }

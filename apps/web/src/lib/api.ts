@@ -1,33 +1,32 @@
-import type { HealthResponse } from "../types.js";
+import { deriveIdempotencyKey, isProtectedRoute } from './idempotency';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+interface ApiRequestOptions extends RequestInit {
+  paymentReference?: string;
+  provider?: string;
+  query?: string;
+}
 
-export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    const contentType = response.headers.get("content-type") ?? "";
+export async function apiFetch(
+  input: RequestInfo | URL,
+  init?: ApiRequestOptions
+): Promise<Response> {
+  const url = typeof input === 'string' ? input : input.url;
+  const isProtected = isProtectedRoute(url);
 
-    if (contentType.includes("application/json")) {
-      const payload = await response.json();
-      if (typeof payload?.error === "string" && payload.error.length > 0) {
-        throw new Error(payload.error);
-      }
-      if (typeof payload?.message === "string" && payload.message.length > 0) {
-        throw new Error(payload.message);
-      }
-      throw new Error(JSON.stringify(payload));
-    }
+  const headers = new Headers(init?.headers);
 
-    const textMessage = await response.text();
-    throw new Error(textMessage || `Request failed: ${response.status}`);
+  if (isProtected && init?.paymentReference && init?.provider && init?.query) {
+    const idempotencyKey = deriveIdempotencyKey(
+      init.provider,
+      init.query,
+      init.paymentReference
+    );
+    headers.set('Idempotency-Key', idempotencyKey);
+    headers.set('X-Payment-Reference', init.paymentReference);
   }
-  return (await response.json()) as T;
-}
 
-export async function fetchHealth(apiBaseUrl: string): Promise<HealthResponse> {
-  return fetchJson<HealthResponse>(`${apiBaseUrl}/health`);
-}
-
-export function money(value: number) {
-  return `$${value.toFixed(3)}`;
+  return fetch(url, {
+    ...init,
+    headers,
+  });
 }
