@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/components/PaymentEvidenceBanner.test.ts src/lib/wallet/machine.test.ts src/lib/sponsorship.test.ts src/pages/LandingPage.test.ts",
+    "test": "node --import tsx --test src/components/PaymentEvidenceBanner.test.ts src/lib/wallet/machine.test.ts src/lib/idempotency.test.ts src/lib/api.test.ts src/lib/x402.test.ts src/lib/sponsorship.test.ts src/pages/LandingPage.test.ts",
     "lint": "eslint src vite.config.ts",
     "format": "prettier --write src vite.config.ts tailwind.config.ts",
     "format:check": "prettier --check src vite.config.ts tailwind.config.ts"
