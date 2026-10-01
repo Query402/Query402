@@ -198,9 +198,124 @@ describe("public routes", () => {
 
     expect(catalogResponse.status).toBe(200);
     expect(catalogResponse.body.providerCount).toBeGreaterThan(0);
-    expect(catalogResponse.body.byCategory.search.length).toBeGreaterThan(0);
-    expect(catalogResponse.body.byCategory.news.length).toBeGreaterThan(0);
-    expect(catalogResponse.body.byCategory.scrape.length).toBeGreaterThan(0);
+    expect(catalogResponse.body.providerCount).toBe(catalogResponse.body.providers.length);
+  });
+
+  describe("public provider routes stay metadata-only (#168)", () => {
+    const PAYMENT_HEADERS = {
+      "payment-signature": "demo-payment-proof",
+      "x-payment": "demo-payment-proof",
+      payment: "demo-payment-proof"
+    };
+
+    async function spyOnProviderExecution() {
+      const [{ registry }, { SearchAdapter }, { NewsAdapter }, { ScrapeAdapter }] =
+        await Promise.all([
+          import("../providers/index.js"),
+          import("../providers/search.js"),
+          import("../providers/news.js"),
+          import("../providers/scrape.js")
+        ]);
+      return [
+        vi.spyOn(registry, "execute"),
+        ...[SearchAdapter, NewsAdapter, ScrapeAdapter].flatMap((Adapter) => [
+          vi.spyOn(Adapter.prototype, "execute"),
+          vi.spyOn(Adapter.prototype, "getFallback")
+        ])
+      ];
+    }
+
+    function expectMetadataOnly(body: Record<string, unknown>) {
+      expect(body).not.toHaveProperty("items");
+      expect(body).not.toHaveProperty("execution");
+      expect(body).not.toHaveProperty("raw");
+      for (const provider of body.providers as Record<string, unknown>[]) {
+        expect(Object.keys(provider).sort()).toEqual(["id", "name", "price"]);
+      }
+    }
+
+    it("catalog returns id, name, and price per provider with no result body", async () => {
+      const { providers } = await import("../lib/pricing.js");
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/catalog");
+
+      expect(response.status).toBe(200);
+      expectMetadataOnly(response.body);
+      expect(response.body.providers).toEqual(
+        providers
+          .filter((provider) => provider.enabled)
+          .map((provider) => ({ id: provider.id, name: provider.name, price: provider.priceUsd }))
+      );
+    });
+
+    it("rejects query-shaped requests without calling a provider", async () => {
+      const spies = await spyOnProviderExecution();
+      const app = await createPublicApp();
+
+      const responses = await Promise.all([
+        request(app).get("/api/catalog?q=stellar"),
+        request(app).get("/api/catalog?query=stellar"),
+        request(app).get("/api/providers?url=https://developers.stellar.org"),
+        request(app).get("/api/matrix?q=stellar"),
+        request(app).get("/api/catalog").send({ mode: "search", q: "stellar" })
+      ]);
+
+      for (const response of responses) {
+        expect(response.status).toBe(400);
+        expect(response.body).toMatchObject({
+          type: "public_query_rejected",
+          errorCode: "invalid_query"
+        });
+        expect(response.body).not.toHaveProperty("items");
+      }
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    });
+
+    it("rejects non-GET methods on provider metadata routes with 405", async () => {
+      const spies = await spyOnProviderExecution();
+      const app = await createPublicApp();
+      const response = await request(app)
+        .post("/api/catalog")
+        .send({ mode: "search", provider: "search.basic", q: "stellar" });
+
+      expect(response.status).toBe(405);
+      expect(response.headers.allow).toBe("GET");
+      expect(response.body).toMatchObject({ errorCode: "invalid_query" });
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    });
+
+    it("treats a request with a payment header as unpaid metadata access", async () => {
+      const spies = await spyOnProviderExecution();
+      const app = await createPublicApp();
+
+      const plain = await request(app).get("/api/catalog");
+      const withPayment = await request(app).get("/api/catalog").set(PAYMENT_HEADERS);
+      const queryWithPayment = await request(app)
+        .get("/api/catalog?q=stellar&provider=search.basic")
+        .set(PAYMENT_HEADERS);
+
+      expect(withPayment.status).toBe(200);
+      expectMetadataOnly(withPayment.body);
+      expect(withPayment.body.providers).toEqual(plain.body.providers);
+      expect(queryWithPayment.status).toBe(400);
+      expect(queryWithPayment.body).not.toHaveProperty("items");
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    });
+
+    it("public router does not import provider execution code", async () => {
+      const { readFile } = await import("node:fs/promises");
+      const source = await readFile(new URL("./public.ts", import.meta.url), "utf8");
+
+      expect(source).not.toMatch(
+        /from\s+["'][^"']*(providers\/(index|registry|search|news|scrape)|query-service)(\.js)?["']/
+      );
+    });
   });
 
   describe("paid query fixture", () => {
