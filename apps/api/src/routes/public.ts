@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { DemoScenarioManifest } from "@query402/shared";
 import { buildCapabilityMatrix, getSortedProviders, providers } from "../lib/pricing.js";
 import { getAnalyticsSummary, getUsageEvents, getSettlementDigest } from "../lib/persistence.js";
 import { config, getConfigSnapshot, getFacilitatorConfigured } from "../lib/config.js";
 import { apiVersion, buildMetadata } from "../lib/build-metadata.js";
-import { getCatalog } from "../services/query-service.js";
+import { listProviderMetadata } from "../providers/metadata.js";
 import {
   MAX_EXPORT_SIZE,
   MAX_PAYMENT_ATTEMPTS,
@@ -38,6 +38,33 @@ const analyticsQuerySchema = z.object({
   recentUsageLimit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
   recentPaymentLimit: z.coerce.number().int().min(1).max(MAX_PAYMENT_ATTEMPTS).optional()
 });
+
+// Public provider routes serve catalog metadata only. Query input is rejected
+// here so a provider can never run without passing through the paid x402 route.
+const PROVIDER_METADATA_PATHS = ["/api/providers", "/api/catalog", "/api/matrix"];
+const QUERY_PARAM_KEYS = ["q", "query", "url"];
+
+const publicQueryRejectedPayload = {
+  error: "Public provider routes return metadata only; run queries through the paid /x402 routes",
+  type: "public_query_rejected",
+  errorCode: "invalid_query"
+};
+
+function isQueryShaped(req: Request): boolean {
+  if (QUERY_PARAM_KEYS.some((key) => req.query[key] !== undefined)) return true;
+  if (Number(req.headers["content-length"] ?? 0) > 0) return true;
+  if (req.headers["transfer-encoding"] !== undefined) return true;
+  return typeof req.body === "object" && req.body !== null && Object.keys(req.body).length > 0;
+}
+
+// Payment headers are intentionally ignored: a public request carrying one is
+// still not a paid query and gets the same metadata-only response.
+function rejectQueryShapedRequest(req: Request, res: Response, next: NextFunction) {
+  if (isQueryShaped(req)) {
+    return res.status(400).json(publicQueryRejectedPayload);
+  }
+  next();
+}
 
 publicRouter.get("/health", (_req, res) => {
   res.json({
@@ -87,18 +114,32 @@ publicRouter.get("/api/readiness", async (_req, res) => {
   });
 });
 
-publicRouter.get("/api/providers", (_req, res) => {
+publicRouter.get("/api/providers", rejectQueryShapedRequest, (_req, res) => {
   res.json({ providers: getSortedProviders() });
 });
 
-publicRouter.get("/api/catalog", (_req, res) => {
-  res.json(getCatalog());
+publicRouter.get("/api/catalog", rejectQueryShapedRequest, (_req, res) => {
+  const metadata = listProviderMetadata();
+  res.json({
+    updatedAt: new Date().toISOString(),
+    providerCount: metadata.length,
+    providers: metadata
+  });
 });
 
-publicRouter.get("/api/matrix", (_req, res) => {
+publicRouter.get("/api/matrix", rejectQueryShapedRequest, (_req, res) => {
   res.json({
     updatedAt: new Date().toISOString(),
     providers: buildCapabilityMatrix()
+  });
+});
+
+publicRouter.all(PROVIDER_METADATA_PATHS, (_req, res) => {
+  res.set("Allow", "GET");
+  res.status(405).json({
+    error: "Public provider routes are read-only metadata; use GET",
+    type: "method_not_allowed",
+    errorCode: "invalid_query"
   });
 });
 

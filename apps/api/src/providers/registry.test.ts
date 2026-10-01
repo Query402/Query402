@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { DefaultProviderRegistry } from "./registry.js";
+import { DefaultProviderRegistry, listProviderMetadata } from "./registry.js";
 import { ProviderAdapter } from "./core.js";
 
 // Ensure pricing data exists for our fake tests so getProviderById works
@@ -200,5 +200,27 @@ describe("ProviderRegistry", () => {
       registry.execute("search", "test.search.live", "test-query", TEST_PROVIDER_PRICE_INTEGER + 1)
     ).rejects.toThrow(/challenge amount/);
     expect(adapter.callCount).toBe(0);
+  });
+});
+
+describe("listProviderMetadata", () => {
+  it("returns exactly id, name, and price for each enabled provider", () => {
+    const metadata = listProviderMetadata();
+    const enabled = providers.filter((p) => p.enabled);
+
+    expect(metadata).toHaveLength(enabled.length);
+    for (const entry of metadata) {
+      expect(Object.keys(entry).sort()).toEqual(["id", "name", "price"]);
+    }
+    expect(metadata).toContainEqual({
+      id: "test.search.live",
+      name: "Test Live Search",
+      price: TEST_PROVIDER_PRICE_USD_CURRENCY
+    });
+    expect(metadata).toContainEqual({
+      id: "test.search.deterministic",
+      name: "Test Deterministic Search",
+      price: TEST_PROVIDER_PRICE_USD_CURRENCY
+    });
   });
 });

@@ -13,6 +13,8 @@ import type {
   ProviderExecutionMetadata
 } from "@query402/shared";
 
+export { listProviderMetadata, type ProviderMetadata } from "./metadata.js";
+
 interface CircuitBreakerConfig {
   maxFailures: number;
   cooldownMs: number;
