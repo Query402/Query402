@@ -56,6 +56,38 @@ const legacyDbSchema = z.object({
 
 export type LegacyDbJson = z.infer<typeof legacyDbSchema>;
 
+export type MigrationCollisionKind = "idempotency_key" | "payment_reference";
+export type MigrationCollisionScope = "file" | "database";
+export type MigrationCollisionTable = "usage_events" | "payment_attempts";
+
+/**
+ * Raised when a source record would collide with another record in the same
+ * file or with a row that already exists in the target database. The whole
+ * import is rolled back when this is thrown.
+ *
+ * Collision messages identify records by their ids only. Payment headers and
+ * payment references (transaction hashes) from the source file are never
+ * echoed into messages or logs.
+ */
+export class JsonMigrationCollisionError extends Error {
+  readonly kind: MigrationCollisionKind;
+  readonly scope: MigrationCollisionScope;
+  readonly table: MigrationCollisionTable;
+
+  constructor(
+    kind: MigrationCollisionKind,
+    scope: MigrationCollisionScope,
+    table: MigrationCollisionTable,
+    detail: string
+  ) {
+    super(detail);
+    this.name = "JsonMigrationCollisionError";
+    this.kind = kind;
+    this.scope = scope;
+    this.table = table;
+  }
+}
+
 export interface JsonMigrationOptions {
   sourcePath: string;
   targetPath: string;
@@ -77,7 +109,7 @@ export interface JsonMigrationResult {
 }
 
 const INSERT_USAGE = `
-INSERT OR IGNORE INTO usage_events (
+INSERT INTO usage_events (
   id, mode, endpoint, provider_id, query_or_url, price_usd, network,
   payment_status, payment_kind, payment_tx_hash, asset, pay_to_address, amount,
   facilitator_url, payer_public_key, trace_id, created_at, latency_ms,
@@ -91,7 +123,7 @@ INSERT OR IGNORE INTO usage_events (
 `;
 
 const INSERT_PAYMENT = `
-INSERT OR IGNORE INTO payment_attempts (
+INSERT INTO payment_attempts (
   id, endpoint, provider_id, amount_usd, network, asset, amount, evidence_kind,
   payer_public_key, pay_to_address, facilitator_url, status, transaction_hash,
   facilitator_result, error, created_at, sponsorship_grant_id, policy_decision,
@@ -130,9 +162,23 @@ export function discoverLegacyDbJsonPaths(extraCandidates: string[] = []): strin
 }
 
 export function parseLegacyDbJson(raw: string): LegacyDbJson {
-  const parsed = legacyDbSchema.safeParse(JSON.parse(raw));
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch {
+    // Do not include the parser message: it can quote the source file.
+    throw new Error("Invalid legacy db.json shape: source file is not valid JSON.");
+  }
+
+  const parsed = legacyDbSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new Error(`Invalid legacy db.json shape: ${parsed.error.message}`);
+    // Report only field paths and issue codes. Raw zod messages can echo
+    // values straight from the source file, including payment headers.
+    const details = parsed.error.issues
+      .slice(0, 10)
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`)
+      .join("; ");
+    throw new Error(`Invalid legacy db.json shape: ${details}`);
   }
 
   return parsed.data;
@@ -145,6 +191,192 @@ export function readLegacyDbJson(sourcePath: string): LegacyDbJson {
 
   const raw = fs.readFileSync(sourcePath, "utf-8");
   return parseLegacyDbJson(raw);
+}
+
+function findDuplicateId(values: string[]): string | null {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      return value;
+    }
+    seen.add(value);
+  }
+
+  return null;
+}
+
+function findDuplicateReference(
+  records: { id: string; reference?: string }[]
+): { id: string; matchingId: string } | null {
+  const firstIdByReference = new Map<string, string>();
+  for (const record of records) {
+    if (!record.reference) {
+      continue;
+    }
+
+    const matchingId = firstIdByReference.get(record.reference);
+    if (matchingId) {
+      return { id: record.id, matchingId };
+    }
+
+    firstIdByReference.set(record.reference, record.id);
+  }
+
+  return null;
+}
+
+const MAX_SQL_PARAMETERS = 400;
+
+function selectExistingValues(
+  database: Database.Database,
+  table: MigrationCollisionTable,
+  column: "id" | "payment_tx_hash" | "transaction_hash",
+  values: string[]
+): Set<string> {
+  const existing = new Set<string>();
+
+  for (let index = 0; index < values.length; index += MAX_SQL_PARAMETERS) {
+    const chunk = values.slice(index, index + MAX_SQL_PARAMETERS);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = database
+      .prepare(`SELECT ${column} AS value FROM ${table} WHERE ${column} IN (${placeholders})`)
+      .all(...chunk) as { value: string }[];
+
+    for (const row of rows) {
+      existing.add(row.value);
+    }
+  }
+
+  return existing;
+}
+
+/**
+ * Rejects a source file where two records share an idempotency key (record id)
+ * or a payment reference (transaction hash). Runs before the target database
+ * is opened, so a rejected file never writes anything.
+ */
+export function assertNoCollisionsInFile(legacy: LegacyDbJson): void {
+  const duplicateUsageId = findDuplicateId(legacy.usage.map((event) => event.id));
+  if (duplicateUsageId) {
+    throw new JsonMigrationCollisionError(
+      "idempotency_key",
+      "file",
+      "usage_events",
+      `duplicate idempotency key "${duplicateUsageId}" in source file (usage_events)`
+    );
+  }
+
+  const duplicatePaymentId = findDuplicateId(legacy.payments.map((payment) => payment.id));
+  if (duplicatePaymentId) {
+    throw new JsonMigrationCollisionError(
+      "idempotency_key",
+      "file",
+      "payment_attempts",
+      `duplicate idempotency key "${duplicatePaymentId}" in source file (payment_attempts)`
+    );
+  }
+
+  const duplicateUsageReference = findDuplicateReference(
+    legacy.usage.map((event) => ({ id: event.id, reference: event.paymentTxHash }))
+  );
+  if (duplicateUsageReference) {
+    throw new JsonMigrationCollisionError(
+      "payment_reference",
+      "file",
+      "usage_events",
+      `duplicate payment reference in source file: usage "${duplicateUsageReference.id}" matches usage "${duplicateUsageReference.matchingId}" (usage_events)`
+    );
+  }
+
+  const duplicatePaymentReference = findDuplicateReference(
+    legacy.payments.map((payment) => ({ id: payment.id, reference: payment.transactionHash }))
+  );
+  if (duplicatePaymentReference) {
+    throw new JsonMigrationCollisionError(
+      "payment_reference",
+      "file",
+      "payment_attempts",
+      `duplicate payment reference in source file: payment "${duplicatePaymentReference.id}" matches payment "${duplicatePaymentReference.matchingId}" (payment_attempts)`
+    );
+  }
+}
+
+/**
+ * Rejects source records that collide with rows already present in the target
+ * database. Runs inside the import transaction so a collision rolls back the
+ * whole import and leaves the previous database unchanged.
+ */
+export function assertNoCollisionsWithDatabase(
+  database: Database.Database,
+  legacy: LegacyDbJson
+): void {
+  const existingUsageIds = selectExistingValues(
+    database,
+    "usage_events",
+    "id",
+    legacy.usage.map((event) => event.id)
+  );
+  const usageKeyCollision = legacy.usage.find((event) => existingUsageIds.has(event.id));
+  if (usageKeyCollision) {
+    throw new JsonMigrationCollisionError(
+      "idempotency_key",
+      "database",
+      "usage_events",
+      `idempotency key "${usageKeyCollision.id}" from source file already exists in target database (usage_events)`
+    );
+  }
+
+  const existingPaymentIds = selectExistingValues(
+    database,
+    "payment_attempts",
+    "id",
+    legacy.payments.map((payment) => payment.id)
+  );
+  const paymentKeyCollision = legacy.payments.find((payment) => existingPaymentIds.has(payment.id));
+  if (paymentKeyCollision) {
+    throw new JsonMigrationCollisionError(
+      "idempotency_key",
+      "database",
+      "payment_attempts",
+      `idempotency key "${paymentKeyCollision.id}" from source file already exists in target database (payment_attempts)`
+    );
+  }
+
+  const existingUsageReferences = selectExistingValues(
+    database,
+    "usage_events",
+    "payment_tx_hash",
+    legacy.usage.flatMap((event) => (event.paymentTxHash ? [event.paymentTxHash] : []))
+  );
+  const usageReferenceCollision = legacy.usage.find((event) =>
+    Boolean(event.paymentTxHash && existingUsageReferences.has(event.paymentTxHash))
+  );
+  if (usageReferenceCollision) {
+    throw new JsonMigrationCollisionError(
+      "payment_reference",
+      "database",
+      "usage_events",
+      `payment reference for usage "${usageReferenceCollision.id}" from source file already exists in target database (usage_events)`
+    );
+  }
+
+  const existingPaymentReferences = selectExistingValues(
+    database,
+    "payment_attempts",
+    "transaction_hash",
+    legacy.payments.flatMap((payment) => (payment.transactionHash ? [payment.transactionHash] : []))
+  );
+  const paymentReferenceCollision = legacy.payments.find((payment) =>
+    Boolean(payment.transactionHash && existingPaymentReferences.has(payment.transactionHash))
+  );
+  if (paymentReferenceCollision) {
+    throw new JsonMigrationCollisionError(
+      "payment_reference",
+      "database",
+      "payment_attempts",
+      `payment reference for payment "${paymentReferenceCollision.id}" from source file already exists in target database (payment_attempts)`
+    );
+  }
 }
 
 function insertRecords(
@@ -186,6 +418,10 @@ function insertRecords(
 export function migrateLegacyJsonToSqlite(options: JsonMigrationOptions): JsonMigrationResult {
   const legacy = readLegacyDbJson(options.sourcePath);
 
+  // Reject duplicate idempotency keys and payment references inside the source
+  // file before the target database is opened.
+  assertNoCollisionsInFile(legacy);
+
   if (options.dryRun) {
     return {
       sourcePath: options.sourcePath,
@@ -201,9 +437,13 @@ export function migrateLegacyJsonToSqlite(options: JsonMigrationOptions): JsonMi
   }
 
   try {
-    const counts = runInAnalyticsTransaction(options.targetPath, (database) =>
-      insertRecords(database, legacy.usage, legacy.payments)
-    );
+    const counts = runInAnalyticsTransaction(options.targetPath, (database) => {
+      // Reject rows that collide with records already in the target database.
+      // Throwing here rolls the whole import back, so the previous database
+      // is left unchanged.
+      assertNoCollisionsWithDatabase(database, legacy);
+      return insertRecords(database, legacy.usage, legacy.payments);
+    });
 
     let archivedPath: string | undefined;
     if (options.archiveSource) {

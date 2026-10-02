@@ -53,7 +53,6 @@ ANALYTICS_DB_PATH=data/analytics.db
    - `GET /api/usage` — optional `?limit=` and `?offset=` (max 500 rows per export; returns HTTP 400 `over_limit_export_size` if exceeded)
    - `GET /api/analytics` — optional `?recentUsageLimit=` and `?recentPaymentLimit=` (max 500 rows per query; returns HTTP 400 `over_limit_export_size` if exceeded)
 
-
 ### Migrating from legacy `db.json`
 
 If you have an old `db.json` from before issue #5:
@@ -70,7 +69,7 @@ npm run migrate:analytics -- \
   --source apps/api/data/db.json \
   --target apps/api/data/analytics.db
 
-# Merge into existing DB (skips duplicate ids)
+# Merge into a non-empty DB (aborts if a record would collide)
 npm run migrate:analytics -- --force
 
 # Rename source file after success
@@ -78,6 +77,13 @@ npm run migrate:analytics -- --archive
 ```
 
 The tool auto-discovers common legacy paths, including the old cwd bug path `apps/api/apps/api/data/db.json`.
+
+The import runs as a single transaction. It is rejected — and rolled back in
+full, leaving the previous database untouched — when the source file contains
+duplicate idempotency keys (record ids) or duplicate payment references
+(transaction hashes), or when a record collides with a row that already exists
+in the target database. Collision errors identify records by id only: payment
+headers and payment references from the source file are never logged.
 
 ---
 
@@ -151,12 +157,13 @@ If the analytics DB is missing or corrupt, the API still starts but persistence 
 
 ## Troubleshooting
 
-| Symptom                               | Likely cause                                 | Fix                                           |
-| ------------------------------------- | -------------------------------------------- | --------------------------------------------- |
-| Empty analytics after upgrade         | New SQLite file; old data still in `db.json` | Run `npm run migrate:analytics`               |
-| Data in wrong directory               | Old cwd-relative paths                       | Set absolute `ANALYTICS_DB_PATH`              |
-| `UNIQUE constraint failed` on tx hash | Duplicate payment proof                      | Expected — duplicate settlements are rejected |
-| Analytics reset on restart            | `ANALYTICS_STORAGE=memory`                   | Switch to `sqlite`                            |
+| Symptom                                        | Likely cause                                                       | Fix                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Empty analytics after upgrade                  | New SQLite file; old data still in `db.json`                       | Run `npm run migrate:analytics`                                            |
+| Data in wrong directory                        | Old cwd-relative paths                                             | Set absolute `ANALYTICS_DB_PATH`                                           |
+| Duplicate idempotency key or payment reference | Source `db.json` repeats a record or collides with an existing row | Migration aborts and rolls back — dedupe the file or choose a fresh target |
+| `UNIQUE constraint failed` on tx hash          | Duplicate payment proof                                            | Expected — duplicate settlements are rejected                              |
+| Analytics reset on restart                     | `ANALYTICS_STORAGE=memory`                                         | Switch to `sqlite`                                                         |
 
 ---
 
