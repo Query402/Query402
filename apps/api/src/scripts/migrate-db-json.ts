@@ -30,7 +30,7 @@ Options:
   --target <path>   Target SQLite path (default: ANALYTICS_DB_PATH or data/analytics.db)
   --dry-run         Validate and report counts without writing
   --archive         Rename source file after successful migration
-  --force           Allow merging into a non-empty target database
+  --force           Allow merging into a non-empty target database (collisions abort)
   --help            Show this help message
 `);
 }

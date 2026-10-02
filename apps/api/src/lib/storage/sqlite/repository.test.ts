@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { migrateLegacyJsonToSqlite, parseLegacyDbJson } from "../migrate-json.js";
+import {
+  JsonMigrationCollisionError,
+  migrateLegacyJsonToSqlite,
+  parseLegacyDbJson
+} from "../migrate-json.js";
 import { createSqliteStorageRepository } from "./repository.js";
 import { closeAnalyticsDb, getAnalyticsDb, runInAnalyticsTransaction } from "./store.js";
 import { MAX_PAYMENT_ATTEMPTS, MAX_USAGE_EVENTS } from "../constants.js";
@@ -161,6 +165,15 @@ describe("SqliteStorageRepository", () => {
   });
 });
 
+function captureMigrationError(options: { sourcePath: string; targetPath: string }): string {
+  try {
+    migrateLegacyJsonToSqlite(options);
+    return "";
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 describe("legacy db.json migration", () => {
   let sourcePath = createTempJsonPath();
   let targetPath = createTempAnalyticsDbPath();
@@ -199,16 +212,107 @@ describe("legacy db.json migration", () => {
     repository.close();
   });
 
-  it("skips duplicate ids when merging migrated records", () => {
+  it("rejects a duplicate idempotency key inside the file and imports nothing", async () => {
+    const fixture = buildLegacyDbFixture();
+    fixture.usage.push({ ...fixture.usage[0] });
+    fs.writeFileSync(sourcePath, JSON.stringify(fixture, null, 2));
+
+    const seed = createSqliteStorageRepository(targetPath);
+    expect(await seed.getUsageEvents()).toHaveLength(0);
+    seed.close();
+    expect(fs.existsSync(targetPath)).toBe(true);
+
+    expect(() => migrateLegacyJsonToSqlite({ sourcePath, targetPath })).toThrow(
+      JsonMigrationCollisionError
+    );
+
+    const repository = createSqliteStorageRepository(targetPath);
+    expect(await repository.getUsageEvents()).toHaveLength(0);
+    expect(await repository.getPaymentAttempts()).toHaveLength(0);
+    repository.close();
+  });
+
+  it("rejects a duplicate payment reference inside the file without echoing it", async () => {
+    const fixture = buildLegacyDbFixture();
+    const paymentReference = fixture.payments[0].transactionHash ?? "";
+    expect(paymentReference.length).toBeGreaterThan(0);
+
+    fixture.payments.push({ ...fixture.payments[0], id: "pay_legacy_2" });
+    fs.writeFileSync(sourcePath, JSON.stringify(fixture, null, 2));
+
+    const message = captureMigrationError({ sourcePath, targetPath });
+
+    expect(message).toMatch(/duplicate payment reference/);
+    expect(message).not.toContain(paymentReference);
+    expect(message).not.toContain("payment-response");
+
+    const repository = createSqliteStorageRepository(targetPath);
+    expect(await repository.getUsageEvents()).toHaveLength(0);
+    expect(await repository.getPaymentAttempts()).toHaveLength(0);
+    repository.close();
+  });
+
+  it("rejects a duplicate usage payment reference inside the file", () => {
+    const fixture = buildLegacyDbFixture();
+    const usageReference = fixture.payments[0].transactionHash ?? "";
+    expect(usageReference.length).toBeGreaterThan(0);
+
+    fixture.usage[0].paymentTxHash = usageReference;
+    fixture.usage.push({ ...fixture.usage[0], id: "use_legacy_2" });
+    fs.writeFileSync(sourcePath, JSON.stringify(fixture, null, 2));
+
+    const message = captureMigrationError({ sourcePath, targetPath });
+
+    expect(message).toMatch(/duplicate payment reference/);
+    expect(message).not.toContain(usageReference);
+  });
+
+  it("rejects a key that already exists in SQLite and leaves the database unchanged", async () => {
     const fixture = buildLegacyDbFixture();
     fs.writeFileSync(sourcePath, JSON.stringify(fixture, null, 2));
 
     const first = migrateLegacyJsonToSqlite({ sourcePath, targetPath });
-    const second = migrateLegacyJsonToSqlite({ sourcePath, targetPath });
-
     expect(first.usageInserted).toBe(1);
-    expect(second.usageInserted).toBe(0);
-    expect(second.usageSkipped).toBe(1);
-    expect(second.paymentsSkipped).toBe(1);
+    expect(first.paymentsInserted).toBe(1);
+
+    const paymentReference = fixture.payments[0].transactionHash ?? "";
+    expect(paymentReference.length).toBeGreaterThan(0);
+    const message = captureMigrationError({ sourcePath, targetPath });
+
+    expect(message).toMatch(/already exists in target database/);
+    expect(message).not.toContain(paymentReference);
+
+    const repository = createSqliteStorageRepository(targetPath);
+    expect(await repository.getUsageEvents()).toHaveLength(1);
+    expect(await repository.getPaymentAttempts()).toHaveLength(1);
+    repository.close();
+  });
+
+  it("rejects a payment reference that already exists in SQLite and imports nothing", async () => {
+    const fixture = buildLegacyDbFixture();
+    fs.writeFileSync(sourcePath, JSON.stringify(fixture, null, 2));
+    migrateLegacyJsonToSqlite({ sourcePath, targetPath });
+
+    // Disjoint ids, but the same on-chain payment reference as the first file.
+    const second = buildLegacyDbFixture();
+    second.usage[0].id = "use_legacy_2";
+    second.payments[0].id = "pay_legacy_2";
+    const paymentReference = second.payments[0].transactionHash ?? "";
+    expect(paymentReference.length).toBeGreaterThan(0);
+    fs.writeFileSync(sourcePath, JSON.stringify(second, null, 2));
+
+    const message = captureMigrationError({ sourcePath, targetPath });
+
+    expect(message).toMatch(/payment reference for payment "pay_legacy_2"/);
+    expect(message).not.toContain(paymentReference);
+
+    const repository = createSqliteStorageRepository(targetPath);
+    const usageEvents = await repository.getUsageEvents();
+    const payments = await repository.getPaymentAttempts();
+    expect(usageEvents).toHaveLength(1);
+    expect(usageEvents[0]?.id).toBe("use_legacy_1");
+    expect(payments).toHaveLength(1);
+    expect(payments[0]?.id).toBe("pay_legacy_1");
+    repository.close();
   });
 });
