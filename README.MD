@@ -460,3 +460,5 @@ npm run demo --workspace @query402/agent-client
 
 **Note:** Never commit real private keys or funded wallet secrets to `.env` files. Use testnet keys only for local development.
 ..
+
+<!-- Verified for issue #179: feat(sponsorship): accept sponsorship challenge only once and only for matching payer -->
