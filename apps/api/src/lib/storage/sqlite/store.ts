@@ -69,9 +69,9 @@ export function expectedSchemaVersion(): number {
 }
 
 export function appliedSchemaVersion(database: Database.Database): number {
-  const row = database
-    .prepare(`SELECT MAX(version) AS version FROM schema_migrations`)
-    .get() as { version: number | null };
+  const row = database.prepare(`SELECT MAX(version) AS version FROM schema_migrations`).get() as {
+    version: number | null;
+  };
   return row.version ?? 0;
 }
 
@@ -99,7 +99,8 @@ export function getAnalyticsDb(dbPath: string): Database.Database {
   try {
     confinedPath = resolveConfinedDataPath(dbPath);
   } catch (error) {
-    initError = error instanceof Error ? error : new Error("Storage path is outside the data directory");
+    initError =
+      error instanceof Error ? error : new Error("Storage path is outside the data directory");
     activeDbPath = dbPath;
     throw initError;
   }

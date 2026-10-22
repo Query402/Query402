@@ -246,6 +246,8 @@ describe("CLI exit-code contract", () => {
   // -------------------------------------------------------------------------
   // Regression: invalid input must never silently succeed
   // -------------------------------------------------------------------------
+  // Spawns a fresh CLI process per invocation, so allow more than the default
+  // 5s budget on slower CI runners.
   it("invalid input never exits with code 0 to prevent silent automation failures", async () => {
     const invalidInvocations = [
       [],
@@ -261,7 +263,7 @@ describe("CLI exit-code contract", () => {
       const { code } = await runCli(...args);
       expect(code, `Expected non-zero exit for args: ${JSON.stringify(args)}`).not.toBe(0);
     }
-  });
+  }, 30_000);
 });
 
 describe("redactInput", () => {

@@ -31,15 +31,15 @@ export type ChallengeValidationResult =
   { ok: true; requirements: PaymentRequirements } | { ok: false; mismatch: ChallengeMismatch };
 
 /**
- * Amounts are quoted in asset smallest units (USDC has 6 decimals). Compare
- * with integer math to stay float-safe.
+ * Amounts are quoted in asset smallest units (Stellar USDC has 7 decimals).
+ * Compare with integer math to stay float-safe.
  */
 export function parseAmountToUsd(amount: string): number | null {
   if (!/^\d+(\.\d+)?$/.test(amount.trim())) {
     return null;
   }
   const parsed = Number(amount);
-  return Number.isFinite(parsed) ? parsed / 1_000_000 : null;
+  return Number.isFinite(parsed) ? parsed / 10_000_000 : null;
 }
 
 function resourceProvider(challenge: PaymentRequired): string | null {
