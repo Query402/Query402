@@ -16,6 +16,11 @@ jobs:
       - name: Enable pnpm
         run: corepack enable
 
+      - name: Repository malware guard
+        run: |
+          node scripts/check-repo-malware.mjs
+          node --test scripts/check-repo-malware.test.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

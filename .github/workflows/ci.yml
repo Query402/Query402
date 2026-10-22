@@ -38,6 +38,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Repository malware guard
+        run: |
+          node scripts/check-repo-malware.mjs
+          node --test scripts/check-repo-malware.test.mjs
+
       - name: Install dependencies
         run: npm ci
 

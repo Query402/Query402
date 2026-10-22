@@ -29,6 +29,8 @@
     "format:check": "prettier --check .",
     "check:source-artifacts": "node scripts/check-source-artifacts.mjs",
     "check:payment-leaks": "node scripts/check-payment-leaks.mjs",
+    "check:repo-malware": "node scripts/check-repo-malware.mjs",
+    "test:repo-malware": "node --test scripts/check-repo-malware.test.mjs",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
