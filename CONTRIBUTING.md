@@ -9,7 +9,9 @@ opening a pull request.
 - Node.js `24.14.1`, matching [`.nvmrc`](./.nvmrc)
 - npm (the version bundled with Node.js)
 
-With `nvm`, select the repository's Node version before installing dependencies:
+[`.nvmrc`](./.nvmrc) is the single source of truth for the Node version used
+locally, in CI, and on deploy. With `nvm`, select it before installing
+dependencies:
 
 ```bash
 nvm install
