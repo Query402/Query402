@@ -35,8 +35,11 @@ export class ChallengeMismatchError extends Error {
  * server's provider/network/asset/amount disagrees with the config; the
  * signer is never constructed on that path.
  */
-export async function fetchValidatedChallenge(endpoint: string): Promise<PaymentRequired> {
-  const probe = await fetch(endpoint, { method: "GET" });
+export async function fetchValidatedChallenge(
+  endpoint: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<PaymentRequired> {
+  const probe = await fetchImpl(endpoint, { method: "GET" });
   if (probe.status !== 402) {
     throw new Error(`Expected a 402 challenge from ${endpoint} but got status ${probe.status}.`);
   }
@@ -299,7 +302,7 @@ export async function runPaidQuery(
           // BEFORE asking for a signature. This fetches and validates the
           // challenge; on mismatch it throws and the signer below is never
           // constructed.
-          await fetchValidatedChallenge(endpoint);
+          await fetchValidatedChallenge(endpoint, fetchFn);
 
           const wallet = deps.createWallet
             ? deps.createWallet(secretKey ?? "test-secret", network)

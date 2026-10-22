@@ -5,6 +5,18 @@ import { applyApiTestEnv, resetApiTestStorage, TEST_WALLET } from "../test/api-t
 
 const executeQueryMock = vi.fn();
 
+// The header-presence tests below reject requests before the x402 middleware
+// runs, so keep the suite offline instead of initializing a live facilitator.
+vi.mock("@x402/express", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@x402/express")>();
+  return {
+    ...original,
+    paymentMiddlewareFromHTTPServer: vi.fn(
+      () => (_req: unknown, _res: unknown, next: () => void) => next()
+    )
+  };
+});
+
 vi.mock("../services/query-service.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../services/query-service.js")>();
   return {
@@ -53,7 +65,7 @@ describe("protected route validation and error handling", () => {
 
   afterEach(async () => {
     await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   async function createValidationApp() {
@@ -160,7 +172,7 @@ describe("protected route validation and error handling", () => {
 
 describe("x402 payment debug metadata - helpers", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("computes payment header fingerprint without exposing original", async () => {
@@ -246,7 +258,7 @@ describe("x402 payment debug metadata - demo mode", () => {
 
   afterEach(async () => {
     await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   async function createDemoDebugApp() {
@@ -451,7 +463,7 @@ describe("x402 payment header presence validation - non-demo routes", () => {
 
   afterEach(async () => {
     await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   async function createHeaderValidationApp() {

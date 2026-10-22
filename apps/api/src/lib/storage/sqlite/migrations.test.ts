@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyMigrations, closeAnalyticsDb, expectedSchemaVersion, getAnalyticsDb, MigrationError } from "./store.js";
+import {
+  applyMigrations,
+  closeAnalyticsDb,
+  expectedSchemaVersion,
+  getAnalyticsDb,
+  MigrationError
+} from "./store.js";
 import { bootApi } from "./startup.js";
 
 describe("sqlite migrations", () => {
@@ -60,11 +66,15 @@ describe("sqlite migrations", () => {
       ])
     ).toThrow(MigrationError);
 
-    const versions = database.prepare(`SELECT version FROM schema_migrations ORDER BY version`).all() as {
+    const versions = database
+      .prepare(`SELECT version FROM schema_migrations ORDER BY version`)
+      .all() as {
       version: number;
     }[];
     expect(versions.map((row) => row.version)).toEqual([1]);
-    expect(database.prepare(`SELECT name FROM sqlite_master WHERE name = 'later'`).get()).toBeUndefined();
+    expect(
+      database.prepare(`SELECT name FROM sqlite_master WHERE name = 'later'`).get()
+    ).toBeUndefined();
     database.close();
   });
 

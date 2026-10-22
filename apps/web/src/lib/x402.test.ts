@@ -51,6 +51,7 @@ function fakeWallet(): WalletSessionMachine {
   const state: WalletState = { status: "connected", address: PAYER };
   return {
     getState: () => state,
+    getTargetNetworkPassphrase: () => "Test SDF Network ; September 2015",
     signAuthEntry: async (authEntryXdr: string) => ({
       signedAuthEntry: authEntryXdr,
       signerAddress: PAYER
