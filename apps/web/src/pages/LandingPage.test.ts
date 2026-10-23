@@ -1,6 +1,6 @@
 import { test, describe, before } from "node:test";
 import assert from "node:assert";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import React from "react";
 import { renderToString } from "react-dom/server";
@@ -42,6 +42,9 @@ const PROTECTED_ENDPOINTS = [
 
 const PAYMENT_HEADERS = ["X-Sponsorship-Grant", "X-Payment", "x402-"];
 
+const LOGO_PATH = "/assets/query402-logo.png";
+const LOGO_FILE = new URL("../../public/assets/query402-logo.png", import.meta.url);
+
 let LandingPage: React.ComponentType;
 
 before(async () => {
@@ -60,6 +63,28 @@ function renderLandingPage(): string {
     console.error = originalConsoleError;
   }
 }
+
+describe("LandingPage - logo asset", () => {
+  test("canonical logo asset exists under the web application", () => {
+    assert.equal(
+      existsSync(LOGO_FILE),
+      true,
+      `Expected canonical logo at apps/web/public${LOGO_PATH}`
+    );
+  });
+
+  test("landing page references the canonical logo path", () => {
+    assert.ok(
+      landingSource.includes(LOGO_PATH),
+      `LandingPage must reference ${LOGO_PATH}`
+    );
+  });
+
+  test("landing page renders the logo image", () => {
+    const html = renderLandingPage();
+    assert.match(html, new RegExp(`<img[^>]*src="${LOGO_PATH}"`));
+  });
+});
 
 describe("LandingPage - no paid or sponsored query path", () => {
   test("does not import the payment signer (x402)", () => {

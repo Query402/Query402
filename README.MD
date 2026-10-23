@@ -3,7 +3,7 @@
 > repository is the canonical workspace for Wave issues and contributions.
 
 <div align="center">
-  <img src="./public/Query402-logo.png" alt="Query402 logo" width="180" />
+  <img src="./apps/web/public/assets/query402-logo.png" alt="Query402 logo" width="180" />
   <h1>Query402</h1>
   <p><strong>Agentic pay-per-query internet access on Stellar with x402.</strong></p>
 
