@@ -1,10 +1,11 @@
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyMigrations, closeAnalyticsDb, expectedSchemaVersion, getAnalyticsDb, MigrationError } from "./store.js";
-import { bootApi } from "./startup.js";
+import { bootApi, createGracefulShutdown, registerShutdownHandlers } from "./startup.js";
 
 describe("sqlite migrations", () => {
   const directories: string[] = [];
@@ -81,6 +82,83 @@ describe("sqlite migrations", () => {
 
     expect(booted.listening).toBe(false);
     expect(booted.failedVersion).toBe(2);
+    expect(booted.server).toBeNull();
     expect(listened).toBe(false);
+  });
+
+  it("retains the HTTP server handle returned by listen", () => {
+    const fakeServer = { close: vi.fn() };
+    const booted = bootApi({
+      openDatabase: () => undefined,
+      listen: () => fakeServer
+    });
+
+    expect(booted.listening).toBe(true);
+    expect(booted.server).toBe(fakeServer);
+  });
+
+  it("drains the HTTP server before closing SQLite exactly once on repeated signals", async () => {
+    const events: string[] = [];
+    let finishClose: ((err?: Error) => void) | undefined;
+    const server = {
+      close: vi.fn((cb?: (err?: Error) => void) => {
+        events.push("server.close:start");
+        finishClose = cb;
+      })
+    };
+    const closeDatabase = vi.fn(() => {
+      events.push("db.close");
+    });
+    const exit = vi.fn();
+    const fakeProcess = new EventEmitter() as unknown as Pick<NodeJS.Process, "once" | "off"> &
+      EventEmitter;
+
+    const { shutdown, dispose } = registerShutdownHandlers({
+      server,
+      closeDatabase,
+      exit,
+      timeoutMs: 1000,
+      processTarget: fakeProcess
+    });
+
+    fakeProcess.emit("SIGTERM");
+    fakeProcess.emit("SIGINT");
+    const secondCall = shutdown("SIGTERM");
+
+    expect(server.close).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).not.toHaveBeenCalled();
+
+    events.push("server.close:drained");
+    finishClose?.();
+
+    const code = await secondCall;
+    expect(code).toBe(0);
+    expect(events).toEqual(["server.close:start", "server.close:drained", "db.close"]);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+    expect(exit).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it("forces non-zero exit when server close exceeds the bounded shutdown timeout", async () => {
+    const server = {
+      close: vi.fn(() => {
+        // Never invokes callback — simulates stuck keep-alive/in-flight connection
+      })
+    };
+    const closeDatabase = vi.fn();
+    const exit = vi.fn();
+
+    const shutdown = createGracefulShutdown({
+      server,
+      closeDatabase,
+      exit,
+      timeoutMs: 25
+    });
+
+    const code = await shutdown("SIGTERM");
+    expect(code).toBe(1);
+    expect(server.close).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(1);
   });
 });

@@ -1,10 +1,10 @@
 import { app } from "./app.js";
 import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
-import { bootApi } from "./lib/storage/sqlite/startup.js";
+import { bootApi, registerShutdownHandlers } from "./lib/storage/sqlite/startup.js";
 
 const result = bootApi({
-  listen: () => {
+  listen: () =>
     app.listen(config.PORT_API, () => {
       logger.info(
         {
@@ -14,10 +14,11 @@ const result = bootApi({
         },
         "Query402 API listening"
       );
-    });
-  }
+    })
 });
 
-if (!result.listening) {
+if (!result.listening || !result.server) {
   process.exit(1);
 }
+
+registerShutdownHandlers({ server: result.server });
