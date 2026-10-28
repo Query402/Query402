@@ -149,9 +149,8 @@ describe("analytics privacy persistence gate (memory store)", () => {
   });
 
   it("rejects persistPaymentAndUsage when usage cannot be redacted", async () => {
-    const { persistPaymentAndUsage, getUsageEvents, getPaymentAttempts } = await import(
-      "./persistence.js"
-    );
+    const { persistPaymentAndUsage, getUsageEvents, getPaymentAttempts } =
+      await import("./persistence.js");
     const fixture = buildPaidQueryFixture();
     await persistPaymentAndUsage({
       payment: fixture.payment,

@@ -8,8 +8,10 @@ import {
   DEMO_MODE_PROBE_TIMEOUT_MS
 } from "./demo-guard.js";
 
-const SECRET_SENTINEL =
-  "SBU4V2PLOHV6J3Z3W2N3M3K3L3J3H3G3F3E3D3C3B3A393837363534XXX".replace("XXX", "AB3D");
+const SECRET_SENTINEL = "SBU4V2PLOHV6J3Z3W2N3M3K3L3J3H3G3F3E3D3C3B3A393837363534XXX".replace(
+  "XXX",
+  "AB3D"
+);
 
 function healthResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

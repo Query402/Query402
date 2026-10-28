@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { query402ReceiptSchema } from "@query402/shared";
 import { isPaymentProofFresh } from "@query402/shared";
 import type { PaidQueryResponse, PublicPaymentEvidence } from "../types.js";
-import { buildReceipt, receiptFilename, serializeReceipt, evaluatePaymentEvidenceGate, validateReceipt } from "./receipt.js";
+import {
+  buildReceipt,
+  receiptFilename,
+  serializeReceipt,
+  evaluatePaymentEvidenceGate,
+  validateReceipt
+} from "./receipt.js";
 import { isReceiptFresh } from "./freshness.js";
 
 function settledEvidence(overrides: Partial<PublicPaymentEvidence> = {}): PublicPaymentEvidence {
@@ -15,8 +21,7 @@ function settledEvidence(overrides: Partial<PublicPaymentEvidence> = {}): Public
     amount: "100000",
     payTo: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
     facilitatorUrl: "https://facilitator.example",
-    transactionHash:
-      "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    transactionHash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
     ...overrides
   };
 }
@@ -151,9 +156,17 @@ describe("buildReceipt", () => {
     });
     const json = serializeReceipt(receipt);
 
-    assert.equal(json.includes("paymentResponseHeader"), false, "must not include paymentResponseHeader");
+    assert.equal(
+      json.includes("paymentResponseHeader"),
+      false,
+      "must not include paymentResponseHeader"
+    );
     assert.equal(json.includes("facilitatorResult"), false, "must not include facilitatorResult");
-    assert.equal(json.includes("X-Sponsorship-Grant"), false, "must not include sponsorship grant header");
+    assert.equal(
+      json.includes("X-Sponsorship-Grant"),
+      false,
+      "must not include sponsorship grant header"
+    );
     assert.equal(json.includes("Bearer "), false, "must not include facilitator auth header");
     assert.equal(json.includes("BEGIN"), false, "must not include any PEM/private key material");
     assert.equal(json.includes("payer"), false, "must not include payer wallet (public-key leak)");
@@ -262,7 +275,10 @@ describe("receiptFilename", () => {
     });
     const filename = receiptFilename(receipt, FIXED_DATE);
 
-    assert.match(filename, /^query402-receipt-search-search\.basic-2026-06-30T12-34-56-000Z\.json$/);
+    assert.match(
+      filename,
+      /^query402-receipt-search-search\.basic-2026-06-30T12-34-56-000Z\.json$/
+    );
   });
 });
 

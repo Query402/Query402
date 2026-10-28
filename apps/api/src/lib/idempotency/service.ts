@@ -20,9 +20,7 @@ export type IdempotencyAcquireResult =
   | { state: "in_progress" }
   | { state: "conflict" };
 
-export type PaymentProofLookup =
-  | { hit: true; body: unknown }
-  | { hit: false; conflict?: boolean };
+export type PaymentProofLookup = { hit: true; body: unknown } | { hit: false; conflict?: boolean };
 
 function ttlSeconds() {
   return config.IDEMPOTENCY_TTL_SECONDS;
@@ -30,7 +28,9 @@ function ttlSeconds() {
 
 function ensurePaymentProofHashColumn(): void {
   const database = getSponsorshipDb();
-  const columns = database.prepare(`PRAGMA table_info(payment_proofs)`).all() as Array<{ name: string }>;
+  const columns = database.prepare(`PRAGMA table_info(payment_proofs)`).all() as Array<{
+    name: string;
+  }>;
   if (!columns.some((column) => column.name === "request_hash")) {
     database.exec(`ALTER TABLE payment_proofs ADD COLUMN request_hash TEXT NOT NULL DEFAULT ''`);
   }

@@ -41,17 +41,17 @@ interface PrivacySafeAnalyticsResponse {
     verified: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
     settled: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
     failed: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
   };
   recentRecords: Array<{

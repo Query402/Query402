@@ -141,7 +141,8 @@ describe("validateChallengeAgainstConfig", () => {
           scheme: "exact",
           network: "stellar:testnet",
           asset: "USDC",
-          amount: "100000",
+          // $0.06 in 7-decimal USDC units — above the 0.05 configured max.
+          amount: "600000",
           payTo: "GBBB",
           maxTimeoutSeconds: 30,
           extra: {}

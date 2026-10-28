@@ -18,16 +18,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "20"
-          cache: "pnpm"
+          # Match ci.yml and the documented policy (README/CONTRIBUTING): CI runs
+          # the Node version pinned in .nvmrc. The web tests use node:module
+          # registerHooks, which requires Node >= 22.15, so Node 20 cannot run them.
+          node-version-file: .nvmrc
+          cache: "npm"
 
       - name: Static asset guard
         run: |
           node --test scripts/check-static-assets.test.mjs
           node scripts/check-static-assets.mjs
-
-      - name: Enable pnpm
-        run: corepack enable
 
       - name: Repository malware guard
         run: |
@@ -35,10 +35,16 @@ jobs:
           node --test scripts/check-repo-malware.test.mjs
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
+
+      # Build the workspaces before testing: packages that consume @query402/shared
+      # (e.g. agent-client) resolve it through its "exports" map to dist/index.js,
+      # which is gitignored and only exists after a build.
+      - name: Build
+        run: npm run build
 
       - name: Lint
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Test
-        run: pnpm test
+        run: npm test

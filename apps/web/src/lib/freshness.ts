@@ -1,8 +1,4 @@
-import {
-  DEFAULT_TIMESTAMP_MAX_AGE_MS,
-  isFreshTimestamp,
-  parseTimestamp
-} from "@query402/shared";
+import { DEFAULT_TIMESTAMP_MAX_AGE_MS, isFreshTimestamp, parseTimestamp } from "@query402/shared";
 
 export {
   DEFAULT_TIMESTAMP_MAX_AGE_MS,

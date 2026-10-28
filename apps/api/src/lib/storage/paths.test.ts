@@ -33,10 +33,12 @@ describe("confined storage paths", () => {
 
   it("does not open a path that escapes with ..", () => {
     const directory = tempDataDir();
-    expect(() => resolveConfinedDataPath(path.join(directory, "..", "outside.db"), directory)).toThrow(
+    expect(() =>
+      resolveConfinedDataPath(path.join(directory, "..", "outside.db"), directory)
+    ).toThrow(StoragePathError);
+    expect(() => getAnalyticsDb(path.join(directory, "..", "outside.db"))).toThrow(
       StoragePathError
     );
-    expect(() => getAnalyticsDb(path.join(directory, "..", "outside.db"))).toThrow(StoragePathError);
   });
 
   it("does not open a symlink that points outside the data directory", () => {

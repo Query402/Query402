@@ -51,6 +51,9 @@ function fakeWallet(): WalletSessionMachine {
   const state: WalletState = { status: "connected", address: PAYER };
   return {
     getState: () => state,
+    // The machine is configured with the API's target network passphrase;
+    // createMachineSigner reads it when building the signer.
+    getTargetNetworkPassphrase: () => "Test SDF Network ; September 2015",
     signAuthEntry: async (authEntryXdr: string) => ({
       signedAuthEntry: authEntryXdr,
       signerAddress: PAYER

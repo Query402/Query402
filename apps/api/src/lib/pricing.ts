@@ -23,8 +23,13 @@ export class ProviderCatalogConflictError extends Error {
 
 export class PriceMismatchError extends Error {
   readonly code = "price_mismatch" as const;
-  constructor(readonly challengeUnits: number, readonly catalogUnits: number) {
-    super(`x402 challenge amount (${challengeUnits}) does not match catalog price (${catalogUnits})`);
+  constructor(
+    readonly challengeUnits: number,
+    readonly catalogUnits: number
+  ) {
+    super(
+      `x402 challenge amount (${challengeUnits}) does not match catalog price (${catalogUnits})`
+    );
     this.name = "PriceMismatchError";
   }
 }

@@ -67,7 +67,10 @@ function isBlockedAddress(address: string): boolean {
     return true;
   }
 
-  if (BLOCKED_CLOUD_META.includes(address.toLowerCase()) || BLOCKED_CLOUD_META.includes(normalized)) {
+  if (
+    BLOCKED_CLOUD_META.includes(address.toLowerCase()) ||
+    BLOCKED_CLOUD_META.includes(normalized)
+  ) {
     return true;
   }
 
@@ -84,7 +87,7 @@ export function validateUrl(raw: string): UrlPolicyResult {
   try {
     const url = new URL(raw);
 
-    if (!["http:", "https::"].includes(url.protocol)) {
+    if (!["http:", "https:"].includes(url.protocol)) {
       return { safe: false, sanitizedUrl: "", error: "Only HTTP/HTTPS protocols are allowed" };
     }
 

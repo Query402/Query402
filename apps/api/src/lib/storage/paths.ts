@@ -30,7 +30,10 @@ export function resolveApiDataPath(relativeOrAbsolute: string): string {
 
 function isInside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
+  );
 }
 
 function realpathOrThrow(target: string): string {
@@ -46,7 +49,10 @@ function realpathOrThrow(target: string): string {
  * the data directory. Rejects `..`, absolute escapes, and symlinks that
  * point outside. The error never includes file contents.
  */
-export function resolveConfinedDataPath(candidate: string, dataDirectory = configuredDataDirectory()): string {
+export function resolveConfinedDataPath(
+  candidate: string,
+  dataDirectory = configuredDataDirectory()
+): string {
   if (!candidate || candidate.includes("\0")) {
     throw new StoragePathError();
   }
