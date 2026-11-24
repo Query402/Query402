@@ -59,6 +59,8 @@ const envSchema = z.object({
   SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(10),
   SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD: z.coerce.number().positive().default(1),
   SPONSORSHIP_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  CHALLENGE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(60),
+  CHALLENGE_RATE_LIMIT_MAX_CLIENTS: z.coerce.number().int().positive().default(10_000),
   SPONSORSHIP_GRANT_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SPONSORSHIP_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   SPONSORSHIP_DB_PATH: z.string().min(1).default("data/sponsorship.db"),

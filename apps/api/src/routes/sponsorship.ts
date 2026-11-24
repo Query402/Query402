@@ -12,6 +12,7 @@ import {
 } from "../lib/sponsorship/idempotency.js";
 import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
 import { isIdempotencyStorageAvailable } from "../lib/idempotency/service.js";
+import { createChallengeRateLimit } from "../lib/challenge-rate-limit.js";
 
 const challengeRequestSchema = z.object({
   wallet: stellarPublicKeySchema
@@ -30,6 +31,10 @@ const previewRequestSchema = z.object({
 });
 
 export const sponsorshipRouter = Router();
+const sponsorshipChallengeRateLimit = createChallengeRateLimit({
+  limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
+  maxClients: config.CHALLENGE_RATE_LIMIT_MAX_CLIENTS
+});
 
 function sponsorshipDisabled(res: Response) {
   return res.status(503).json({ error: "sponsorship_disabled" });
@@ -44,7 +49,7 @@ function readSponsorshipIdempotencyKey(req: Request): string | undefined {
   return key ? key : undefined;
 }
 
-sponsorshipRouter.post("/api/sponsorship/challenge", (req, res) => {
+sponsorshipRouter.post("/api/sponsorship/challenge", sponsorshipChallengeRateLimit, (req, res) => {
   if (!config.sponsorshipEnabled) {
     return sponsorshipDisabled(res);
   }
@@ -128,7 +133,7 @@ sponsorshipRouter.post("/api/sponsorship/grants", (req, res, next) => {
   }
 });
 
-sponsorshipRouter.post("/api/sponsorship/preview", (req, res) => {
+sponsorshipRouter.post("/api/sponsorship/preview", sponsorshipChallengeRateLimit, (req, res) => {
   const parsed = previewRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
