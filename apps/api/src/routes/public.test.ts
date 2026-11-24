@@ -203,6 +203,34 @@ describe("public routes", () => {
     expect(catalogResponse.body.byCategory.scrape.length).toBeGreaterThan(0);
   });
 
+  describe("Cache-Control: no-store on price-bearing catalog endpoints", () => {
+    const priceBearingRoutes = ["/api/providers", "/api/catalog", "/api/matrix"] as const;
+
+    for (const route of priceBearingRoutes) {
+      it(`GET ${route} includes Cache-Control: no-store`, async () => {
+        const app = await createPublicApp();
+        const response = await request(app).get(route);
+
+        expect(response.status).toBe(200);
+        expect(
+          response.headers["cache-control"],
+          `route=${route} missing Cache-Control: no-store header`
+        ).toBe("no-store");
+      });
+    }
+
+    it("other public endpoints keep default cache behavior", async () => {
+      const app = await createPublicApp();
+      const healthResponse = await request(app).get("/health");
+      const scenariosResponse = await request(app).get("/api/scenarios");
+
+      expect(healthResponse.status).toBe(200);
+      expect(healthResponse.headers["cache-control"]).not.toBe("no-store");
+      expect(scenariosResponse.status).toBe(200);
+      expect(scenariosResponse.headers["cache-control"]).not.toBe("no-store");
+    });
+  });
+
   describe("paid query fixture", () => {
     it("analytics reflects settled paid query from fixture", async () => {
       const { persistPaymentAndUsage } = await import("../lib/persistence.js");

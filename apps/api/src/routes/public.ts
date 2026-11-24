@@ -88,14 +88,17 @@ publicRouter.get("/api/readiness", async (_req, res) => {
 });
 
 publicRouter.get("/api/providers", (_req, res) => {
+  res.set("Cache-Control", "no-store");
   res.json({ providers: getSortedProviders() });
 });
 
 publicRouter.get("/api/catalog", (_req, res) => {
+  res.set("Cache-Control", "no-store");
   res.json(getCatalog());
 });
 
 publicRouter.get("/api/matrix", (_req, res) => {
+  res.set("Cache-Control", "no-store");
   res.json({
     updatedAt: new Date().toISOString(),
     providers: buildCapabilityMatrix()
