@@ -136,10 +136,18 @@ app.use(
 );
 app.use(securityHeaders());
 app.use(express.json({ limit: config.API_JSON_BODY_MAX_BYTES }));
-app.use((req, _res, next) => {
-  logger.info({ method: req.method, url: req.url }, "incoming request");
+export function logApiRequest(
+  req: express.Request,
+  _res: express.Response,
+  next: express.NextFunction
+) {
+  // `req.url` includes the query string. Paid queries and scrape targets are
+  // user-controlled and must not be copied into application logs.
+  logger.info({ method: req.method, path: req.path }, "incoming request");
   next();
-});
+}
+
+app.use(logApiRequest);
 
 app.use(publicRouter);
 app.use(sponsorshipRouter);

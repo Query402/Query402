@@ -94,3 +94,29 @@ describe("global API error handler", () => {
     });
   });
 });
+
+describe("API access logging", () => {
+  it("logs the route path without query-string values", async () => {
+    applyApiTestEnv();
+    const [{ logApiRequest }, { logger }] = await Promise.all([
+      import("./app.js"),
+      import("./lib/logger.js")
+    ]);
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+    const testApp = express();
+    testApp.use(logApiRequest);
+    testApp.get("/x402/search", (_req, res) => res.sendStatus(204));
+
+    await request(testApp)
+      .get("/x402/search")
+      .query({ q: "secret-query-value", provider: "secret-provider-value" })
+      .expect(204);
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      { method: "GET", path: "/x402/search" },
+      "incoming request"
+    );
+    expect(JSON.stringify(infoSpy.mock.calls)).not.toContain("secret-query-value");
+    expect(JSON.stringify(infoSpy.mock.calls)).not.toContain("secret-provider-value");
+  });
+});
