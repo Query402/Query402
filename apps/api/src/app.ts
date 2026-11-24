@@ -16,6 +16,7 @@ import {
   sanitizeErrorMessage
 } from "./services/query-service.js";
 import { ProviderCatalogConflictError } from "./lib/pricing.js";
+import { createChallengeRateLimit, isUnpaidX402Request } from "./lib/challenge-rate-limit.js";
 
 const UNKNOWN_INTERNAL_ERROR_MESSAGE = "Internal server error";
 
@@ -142,6 +143,13 @@ app.use((req, _res, next) => {
 
 app.use(publicRouter);
 app.use(sponsorshipRouter);
+app.use(
+  createChallengeRateLimit({
+    limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
+    maxClients: config.CHALLENGE_RATE_LIMIT_MAX_CLIENTS,
+    shouldLimit: isUnpaidX402Request
+  })
+);
 app.use(createX402Middleware());
 app.use(protectedRouter);
 app.use(paidRouter);
