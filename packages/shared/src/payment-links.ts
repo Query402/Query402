@@ -74,6 +74,15 @@ export function buildPaymentLink(input: unknown): PaymentLink {
   }
 
   const { amount, asset, destination, network } = parsed.data;
+  if (asset === "XNO") {
+    throw new InvalidPaymentLinkError([
+      {
+        field: "asset",
+        message: "XNO settles on Nano, not through a Stellar payment link"
+      }
+    ]);
+  }
+
   const params = new URLSearchParams({
     amount: formatMicroUsd(amount),
     asset,

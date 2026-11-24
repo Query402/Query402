@@ -230,6 +230,19 @@ describe("catalogPriceToPaymentAmount", () => {
     );
   });
 
+  it("does not build a Stellar link for Nano", () => {
+    expect(() => buildPaymentLink({ ...validInput, asset: "XNO" })).toThrow(
+      InvalidPaymentLinkError
+    );
+    try {
+      buildPaymentLink({ ...validInput, asset: "XNO" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InvalidPaymentLinkError);
+      expect((error as InvalidPaymentLinkError).issues[0]?.field).toBe("asset");
+      expect((error as InvalidPaymentLinkError).message).not.toContain(TEST_WALLET);
+    }
+  });
+
   it("round-trips a link amount back to its catalog price", () => {
     const priceUsd = 0.03;
     const link = buildPaymentLink({
