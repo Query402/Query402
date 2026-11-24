@@ -142,8 +142,7 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
       expiresAt: "2099-01-01T00:00:00.000Z"
     });
     const sign = vi.fn().mockResolvedValue({ "PAYMENT-SIGNATURE": "signed-fixture" });
-    let calls = 0;
-    const fetchStub = vi.fn(async (url: RequestInfo | URL) => {
+    const fetchStub = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const href = String(url);
       if (href.includes("/api/providers")) {
         return new Response(
@@ -153,8 +152,11 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
           { status: 200, headers: { "content-type": "application/json" } }
         );
       }
-      calls += 1;
-      if (calls === 1) {
+      const hasPayment = Boolean(
+        init?.headers &&
+          new Headers(init.headers as HeadersInit).get("PAYMENT-SIGNATURE")
+      );
+      if (!hasPayment) {
         return challengeResponse(paymentRequired);
       }
       return new Response(JSON.stringify({ ok: true, result: { priceUsd: PRICE_USD } }), {
@@ -168,6 +170,7 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
     process.env.API_BASE_URL = "http://localhost:3001";
     process.env.STELLAR_NETWORK = NETWORK;
     process.env.X402_ASSET = ASSET;
+    process.env.X402_MAX_PRICE_USD = "1";
     vi.resetModules();
 
     const { runPaidQuery: run } = await import("./client.js");
