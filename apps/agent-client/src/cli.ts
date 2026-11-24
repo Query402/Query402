@@ -1,12 +1,56 @@
 import { runPaidQuery } from "./client.js";
 
-type QueryMode = "search" | "news" | "scrape";
+export type QueryMode = "search" | "news" | "scrape";
+
+export interface SummaryInput {
+  mode: QueryMode;
+  provider: string;
+  isDemoMode: boolean;
+  status: number;
+  priceUsd?: string | number;
+  asset?: string;
+  traceId?: string;
+  evidenceId?: string;
+  latencyMs?: number;
+}
+
+/** Formats the post-query summary table. Pure function — safe to unit-test directly. */
+export function formatSummary(input: SummaryInput): string {
+  const rows: [string, string][] = [
+    ["Mode", input.mode],
+    ["Provider", input.provider],
+    ["Status", String(input.status)],
+    ["Client", input.isDemoMode ? "demo" : "real"],
+    ["Price (USD)", input.priceUsd != null ? String(input.priceUsd) : "n/a"],
+    ["Asset", input.asset ?? "n/a"],
+    ["Trace ID", input.traceId ?? "unavailable"],
+    ["Evidence ID", input.evidenceId ?? "unavailable"]
+  ];
+  if (input.latencyMs != null) {
+    rows.push(["Latency", `${input.latencyMs}ms`]);
+  }
+  const labelWidth = Math.max(...rows.map(([label]) => label.length));
+  const body = rows.map(([label, value]) => `  ${label.padEnd(labelWidth)}  ${value}`).join("\n");
+  const divider = "=".repeat(labelWidth + 4 + 20);
+  return `\n=== Query402 Paid Query Summary ===\n${body}\n${divider}`;
+}
 
 function usage() {
   console.log("Usage:");
   console.log('  npm run cli -- search "latest soroban updates" --provider search.basic');
   console.log('  npm run cli -- news "stablecoin micropayments" --provider news.fast');
   console.log('  npm run cli -- scrape "https://example.com" --provider scrape.page');
+  console.log("Options:");
+  console.log("  --help, -h         Show this help and exit");
+  console.log("  --provider <id>    Provider ID (default: search.basic / news.fast / scrape.page)");
+  console.log("  --receipt, --json  Output structured JSON receipt only");
+  console.log("");
+  console.log("Payment safety (env):");
+  console.log("  X402_MAX_PRICE_USD  Max price per query the CLI will sign (default 0.05)");
+  console.log("  X402_ASSET          Expected settlement asset (default USDC)");
+  console.log("  STELLAR_NETWORK     Expected network (default stellar:testnet)");
+  console.log("  The 402 challenge is checked against these before any payment is signed.");
+  console.log("  A mismatching provider, network, asset, or amount aborts without signing.");
 }
 
 function readArg(flag: string, args: string[]) {
@@ -17,10 +61,46 @@ function readArg(flag: string, args: string[]) {
   return args[index + 1];
 }
 
+function hasFlag(flag: string, args: string[]) {
+  return args.includes(flag);
+}
+
+export function redactInput(input: string): string {
+  if (input.length <= 50) return input;
+  return input.slice(0, 47) + "...";
+}
+
+export function buildReceipt(input: {
+  mode: QueryMode;
+  provider: string;
+  term: string;
+  price?: string | number;
+  traceId?: string;
+}) {
+  return {
+    command: input.mode,
+    provider: input.provider,
+    input: redactInput(input.term),
+    price: input.price ?? null,
+    traceId: input.traceId ?? null
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const modeArg = args[0];
   const term = args[1];
+  const receiptMode = hasFlag("--receipt", args) || hasFlag("--json", args);
+
+  if (hasFlag("--help", args) || hasFlag("-h", args)) {
+    usage();
+    process.exit(0);
+  }
+
+  if (hasFlag("--version", args) || hasFlag("-V", args)) {
+    console.log("query402-agent-client/0.1.0");
+    process.exit(0);
+  }
 
   if (!modeArg || !["search", "news", "scrape"].includes(modeArg)) {
     usage();
@@ -43,35 +123,58 @@ async function main() {
     readArg("--provider", args) ??
     (mode === "search" ? "search.basic" : mode === "news" ? "news.fast" : "scrape.page");
 
+  const start = Date.now();
   const result = await runPaidQuery({
     mode,
     provider,
     query: mode === "scrape" ? undefined : term,
     url: mode === "scrape" ? term : undefined
   });
+  const latencyMs = Date.now() - start;
 
-  console.log("\n=== Query402 Paid Request ===");
-  console.log(`Endpoint: ${result.endpoint}`);
-  console.log(`Provider: ${provider}`);
-  console.log(`Status: ${result.status}`);
-  console.log(`Payment Header: ${result.paymentResponse ?? "<none>"}`);
+  const payload = result.body as Record<string, unknown>;
+  const resultBlock = (payload?.result ?? (payload?.body as Record<string, unknown>)?.result) as
+    Record<string, unknown> | undefined;
+  const evidenceBlock = (payload?.payment as Record<string, unknown>)?.evidence as
+    Record<string, unknown> | undefined;
 
-  const payload = result.body as Record<string, any>;
-  const price = payload?.result?.priceUsd ?? payload?.body?.result?.priceUsd;
-  const trace = payload?.result?.traceId ?? payload?.body?.result?.traceId;
-
-  if (price) {
-    console.log(`Price Paid (USD): ${price}`);
+  if (receiptMode) {
+    console.log(
+      JSON.stringify(
+        buildReceipt({
+          mode,
+          provider,
+          term,
+          price: resultBlock?.priceUsd as string | number | undefined,
+          traceId: resultBlock?.traceId as string | undefined
+        }),
+        null,
+        2
+      )
+    );
+    return;
   }
-  if (trace) {
-    console.log(`Trace ID: ${trace}`);
-  }
 
-  console.log("Response summary:");
-  console.log(JSON.stringify(payload, null, 2));
+  console.log(
+    formatSummary({
+      mode,
+      provider,
+      isDemoMode: result.isDemoMode,
+      status: result.status,
+      priceUsd: resultBlock?.priceUsd as string | number | undefined,
+      asset: (evidenceBlock?.proofLinks as Record<string, string> | undefined)?.asset,
+      traceId: resultBlock?.traceId as string | undefined,
+      evidenceId: (evidenceBlock?.id ?? evidenceBlock?.evidenceId) as string | undefined,
+      latencyMs
+    })
+  );
 }
 
-main().catch((error) => {
-  console.error("CLI request failed:", error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+import { fileURLToPath } from "node:url";
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error("CLI request failed:", error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

@@ -105,7 +105,8 @@ describe("scrape URL safety", () => {
             status: 302,
             headers: { location: "http://169.254.169.254/latest/meta-data" }
           }),
-        resolveHostname: publicResolver
+        resolveHostname: publicResolver,
+        maxRedirects: 5
       })
     ).rejects.toBeInstanceOf(UnsafeScrapeUrlError);
 

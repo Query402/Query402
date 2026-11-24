@@ -4,4 +4,5 @@ coverage
 package-lock.json
 apps/api/data
 apps/api/apps/api/data
+scripts/fixtures/malware-guard
 **/*.map

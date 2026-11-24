@@ -5,7 +5,7 @@ import {
   formatMigrationResult,
   migrateLegacyJsonToSqlite
 } from "../lib/storage/migrate-json.js";
-import { resolveApiDataPath } from "../lib/storage/paths.js";
+import { resolveApiDataPath, resolveConfinedDataPath } from "../lib/storage/paths.js";
 
 interface CliOptions {
   sourcePath?: string;
@@ -97,7 +97,12 @@ function resolveSourcePath(explicitPath?: string): string {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+  options.targetPath = resolveConfinedDataPath(options.targetPath);
+  if (options.sourcePath) {
+    options.sourcePath = resolveConfinedDataPath(options.sourcePath);
+  }
   const sourcePath = resolveSourcePath(options.sourcePath);
+  resolveConfinedDataPath(sourcePath);
 
   if (!options.dryRun && !options.force) {
     assertTargetDbIsEmpty(options.targetPath);

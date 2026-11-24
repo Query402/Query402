@@ -1,5 +1,17 @@
-import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult } from "./core.js";
-import { getProviderById } from "../lib/pricing.js";
+import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult, PaidQueryContext } from "./core.js";
+import {
+  assertPriceMatch,
+  buildChallengeAmountUnits,
+  getProviderById,
+  getProviderPriceUnits,
+  UnsafePriceError,
+  ZeroPriceError
+} from "../lib/pricing.js";
+import type {
+  CircuitBreakerState,
+  ExecutionFallbackReason,
+  ProviderExecutionMetadata
+} from "@query402/shared";
 
 interface CircuitBreakerConfig {
   maxFailures: number;
@@ -19,17 +31,26 @@ class CircuitBreaker {
 
   constructor(private config: CircuitBreakerConfig = DEFAULT_CONFIG) {}
 
-  isOpen(): boolean {
+  getState(): CircuitBreakerState {
+    if (this.failures >= this.config.maxFailures) {
+      const now = Date.now();
+      return now - this.lastFailureTime > this.config.cooldownMs ? "half-open" : "open";
+    }
+    return "closed";
+  }
+
+  allowAttempt(): boolean {
     if (this.failures >= this.config.maxFailures) {
       const now = Date.now();
       if (now - this.lastFailureTime > this.config.cooldownMs) {
-        // Half-open: let one request through to test recovery
+        // Half-open: let one request through to test recovery.
         this.failures = this.config.maxFailures - 1;
-        return false;
+        return true;
       }
-      return true;
+      return false;
     }
-    return false;
+
+    return true;
   }
 
   recordSuccess() {
@@ -64,16 +85,22 @@ export class DefaultProviderRegistry implements ProviderRegistry {
   private adapters = new Map<string, ProviderAdapter>();
   private circuits = new Map<string, CircuitBreaker>();
 
+  constructor(private readonly circuitConfig: CircuitBreakerConfig = DEFAULT_CONFIG) {}
+
   register(adapter: ProviderAdapter): void {
     this.adapters.set(adapter.id, adapter);
-    this.circuits.set(adapter.id, new CircuitBreaker());
+    this.circuits.set(adapter.id, new CircuitBreaker(this.circuitConfig));
   }
 
   async execute(
     mode: "search" | "news" | "scrape",
     providerId: string,
-    queryOrUrl: string
+    queryOrUrl: string,
+    contextOrUnits?: PaidQueryContext | number
   ): Promise<AdapterExecutionResult> {
+    const context = typeof contextOrUnits === "object" ? contextOrUnits : undefined;
+    const challengeAmountUnits = typeof contextOrUnits === "number" ? contextOrUnits : undefined;
+    const startedAt = Date.now();
     const providerDef = getProviderById(providerId);
     if (!providerDef) {
       throw new Error(`Provider not found or disabled: ${providerId}`);
@@ -83,6 +110,20 @@ export class DefaultProviderRegistry implements ProviderRegistry {
       throw new Error(`Provider ${providerId} does not support mode ${mode}`);
     }
 
+    // Pricing gate: the challenge amount must match the catalog price
+    // exactly. Reject before the adapter runs when they diverge, when the
+    // price is zero, or when the price exceeds the safe integer range.
+    const catalogUnits = getProviderPriceUnits(providerId);
+    if (catalogUnits === 0) {
+      throw new ZeroPriceError(providerId);
+    }
+    if (!Number.isSafeInteger(catalogUnits)) {
+      throw new UnsafePriceError(catalogUnits);
+    }
+    const effectiveChallengeUnits =
+      challengeAmountUnits ?? buildChallengeAmountUnits(providerId);
+    assertPriceMatch(effectiveChallengeUnits, catalogUnits);
+
     const adapter = this.adapters.get(providerId);
     if (!adapter) {
       throw new Error(`No adapter registered for provider: ${providerId}`);
@@ -90,51 +131,114 @@ export class DefaultProviderRegistry implements ProviderRegistry {
 
     const circuit = this.circuits.get(providerId)!;
 
+    const buildResult = (
+      items: AdapterExecutionResult["items"],
+      source: AdapterExecutionResult["source"],
+      execution: Partial<ProviderExecutionMetadata>
+    ): AdapterExecutionResult => {
+      const timedOut = execution.timedOut ?? execution.fallbackReason === "timeout";
+      return {
+        items,
+        source,
+        execution: {
+          providerId,
+          source,
+          usedFallback: source !== "live",
+          latencyEstimateMs: providerDef.latencyEstimateMs,
+          observedDurationMs: Date.now() - startedAt,
+          ...execution,
+          timedOut
+        }
+      };
+    };
+
     // If it's a strictly deterministic (mock) adapter
     if (providerDef.sourceType === "deterministic-fallback") {
       if (adapter.getFallback) {
-        return {
-          items: adapter.getFallback(queryOrUrl),
-          source: "deterministic-fallback"
-        };
+        return buildResult(adapter.getFallback(queryOrUrl), "deterministic-fallback", {
+          fallbackReason: "deterministic-provider"
+        });
       }
       // Fallback to executing it directly if no getFallback is provided
       try {
-        const items = await adapter.execute(queryOrUrl);
-        return { items, source: "deterministic-fallback" };
+        const items = await adapter.execute(queryOrUrl, context);
+        return buildResult(items, "deterministic-fallback", {
+          fallbackReason: "deterministic-provider"
+        });
       } catch (err) {
-        return { items: [], source: "unavailable" };
+        return buildResult([], "unavailable", {
+          fallbackReason: "adapter-error"
+        });
       }
     }
 
     // Real adapter logic
-    if (circuit.isOpen() || !(await adapter.isHealthy().catch(() => false))) {
-      return this.handleFallback(adapter, queryOrUrl);
+    if (!circuit.allowAttempt()) {
+      return this.handleFallback(adapter, queryOrUrl, providerDef, startedAt, "circuit-open", {
+        circuitBreakerState: "open"
+      });
+    }
+
+    if (!(await adapter.isHealthy().catch(() => false))) {
+      circuit.recordFailure();
+      return this.handleFallback(adapter, queryOrUrl, providerDef, startedAt, "unhealthy", {
+        circuitBreakerState: circuit.getState()
+      });
     }
 
     try {
-      const items = await circuit.executeWithTimeout(adapter.execute(queryOrUrl));
+      const items = await circuit.executeWithTimeout(adapter.execute(queryOrUrl, context));
       circuit.recordSuccess();
-      return {
-        items,
-        source: "live"
-      };
+      return buildResult(items, "live", {
+        circuitBreakerState: circuit.getState()
+      });
     } catch (err) {
       circuit.recordFailure();
-      return this.handleFallback(adapter, queryOrUrl);
+      const fallbackReason: ExecutionFallbackReason =
+        err instanceof Error && err.message === "Timeout" ? "timeout" : "adapter-error";
+      return this.handleFallback(adapter, queryOrUrl, providerDef, startedAt, fallbackReason, {
+        circuitBreakerState: circuit.getState()
+      });
     }
   }
 
-  private handleFallback(adapter: ProviderAdapter, queryOrUrl: string): AdapterExecutionResult {
+  private handleFallback(
+    adapter: ProviderAdapter,
+    queryOrUrl: string,
+    providerDef: NonNullable<ReturnType<typeof getProviderById>>,
+    startedAt: number,
+    fallbackReason: ExecutionFallbackReason,
+    execution: Partial<ProviderExecutionMetadata> = {}
+  ): AdapterExecutionResult {
     if (adapter.getFallback) {
       return {
         items: adapter.getFallback(queryOrUrl),
-        source: "deterministic-fallback"
+        source: "deterministic-fallback",
+        execution: {
+          providerId: providerDef.id,
+          source: "deterministic-fallback",
+          usedFallback: true,
+          fallbackReason,
+          latencyEstimateMs: providerDef.latencyEstimateMs,
+          observedDurationMs: Date.now() - startedAt,
+          ...execution,
+          timedOut: execution.timedOut ?? fallbackReason === "timeout"
+        }
       };
     }
     return {
       items: [],
-      source: "unavailable"
+      source: "unavailable",
+      execution: {
+        providerId: providerDef.id,
+        source: "unavailable",
+        usedFallback: true,
+        fallbackReason: "missing-fallback",
+        latencyEstimateMs: providerDef.latencyEstimateMs,
+        observedDurationMs: Date.now() - startedAt,
+        ...execution,
+        timedOut: false
+      }
     };
   }
 }

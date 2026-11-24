@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE TABLE IF NOT EXISTS payment_proofs (
   transaction_hash TEXT PRIMARY KEY,
   response_json TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  request_hash TEXT NOT NULL DEFAULT ''
 );
 `;
 

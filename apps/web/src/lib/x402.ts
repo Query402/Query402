@@ -2,25 +2,52 @@ import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import type { ClientStellarSigner } from "@x402/stellar";
 import { ExactStellarScheme } from "@x402/stellar/exact/client";
+import { buildPaymentProofLinks } from "@query402/shared";
 import type { PaidQueryResponse } from "../types.js";
-import { getIdempotencyKey, buildPaidClientRequestKey } from "./idempotency.js";
+import { paidQueryHeaders } from "./api.js";
 
-const stellarRpcUrl = import.meta.env.VITE_STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
+// Optional chain keeps this module importable outside Vite (node:test); Vite
+// still injects the full import.meta.env object in both dev and build.
+const stellarRpcUrl =
+  import.meta.env?.VITE_STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
 function createMachineSigner(
   wallet: import("./wallet/index.js").WalletSessionMachine
 ): ClientStellarSigner {
+  const networkPassphrase = wallet.getTargetNetworkPassphrase();
   return {
     address: wallet.getState().address!,
     signAuthEntry: async (authEntryXdr, opts) => {
-      const res = await wallet.signAuthEntry(authEntryXdr, opts);
+      const res = await wallet.signAuthEntry(authEntryXdr, {
+        ...opts,
+        networkPassphrase: opts?.networkPassphrase ?? networkPassphrase
+      });
       return res;
     },
     signTransaction: async (transactionXdr, opts) => {
-      const res = await wallet.signTransaction(transactionXdr, opts);
+      const res = await wallet.signTransaction(transactionXdr, {
+        ...opts,
+        networkPassphrase: opts?.networkPassphrase ?? networkPassphrase
+      });
       return res;
     }
   };
+}
+
+function enrichWithProofLinks(payload: PaidQueryResponse): PaidQueryResponse {
+  if (payload?.payment?.evidence) {
+    const ev = payload.payment.evidence;
+    if (!ev.proofLinks) {
+      ev.proofLinks = buildPaymentProofLinks({
+        transactionHash: ev.transactionHash,
+        payerPublicKey: ev.payer,
+        payToAddress: ev.payTo,
+        network: ev.network,
+        asset: ev.asset ?? undefined
+      });
+    }
+  }
+  return payload;
 }
 
 export async function runWalletPaidQuery(input: {
@@ -51,16 +78,15 @@ export async function runWalletPaidQuery(input: {
     throw new Error("Wallet is not connected");
   }
 
-  const idempotencyKey = getIdempotencyKey(
-    buildPaidClientRequestKey({
-      route: `/x402/${input.mode}`,
-      mode: input.mode,
-      provider: input.provider,
-      query: input.query,
-      url: input.url,
-      payer: walletAddress
-    })
-  );
+  const headers = paidQueryHeaders({
+    requestUrl: endpoint,
+    mode: input.mode,
+    provider: input.provider,
+    query: input.query,
+    url: input.url,
+    // The payer wallet address is the payment reference for the x402 flow.
+    paymentReference: walletAddress
+  });
 
   const signer = createMachineSigner(input.wallet);
   const client = new x402Client().register(
@@ -71,9 +97,7 @@ export async function runWalletPaidQuery(input: {
 
   const response = await fetchWithPayment(endpoint, {
     method: "GET",
-    headers: {
-      "Idempotency-Key": idempotencyKey
-    }
+    headers
   });
   const payload = await response.json();
 
@@ -84,5 +108,5 @@ export async function runWalletPaidQuery(input: {
     throw new Error(JSON.stringify(payload));
   }
 
-  return payload as PaidQueryResponse;
+  return enrichWithProofLinks(payload as PaidQueryResponse);
 }

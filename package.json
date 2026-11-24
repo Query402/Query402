@@ -2,13 +2,20 @@
   "name": "query402",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Query402/Query402"
+  },
+  "license": "MIT",
   "description": "Query402 monorepo: agentic pay-per-query hub with Stellar x402",
+  "packageManager": "npm@11.11.0",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "engines": {
-    "node": ">=20.0.0 <25.0.0"
+    "node": ">=20.0.0 <25.0.0",
+    "npm": ">=11.0.0 <12.0.0"
   },
   "scripts": {
     "dev:api": "npm run dev --workspace @query402/api",
@@ -21,21 +28,33 @@
     "preview:web": "npm run preview --workspace @query402/web",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces",
-    "test": "npm run test --workspace @query402/shared && npm run test --workspace @query402/api && npm run test --workspace @query402/agent-client",
+    "test": "npm run test --workspace @query402/shared && npm run test --workspace @query402/api && npm run test --workspace @query402/agent-client && npm run test --workspace @query402/web && node --test scripts/demo-transcript-retention.test.mjs && node --test scripts/check-static-assets.test.mjs && node --test scripts/actions-allowlist.test.mjs && npm run test:manifests && npm run test:install-scripts && npm run test:lock-sources",
+    "test:manifests": "node --test scripts/package-provenance.test.mjs",
+    "test:install-scripts": "node --test scripts/check-install-lifecycle.test.mjs",
+    "test:lock-sources": "node --test scripts/check-lock-sources.test.mjs",
     "test:coverage": "npm run test:coverage --workspace @query402/api",
     "migrate:analytics": "npm run migrate:analytics --workspace @query402/api",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:lock-sources": "node scripts/check-lock-sources.mjs",
+    "check:install-scripts": "node scripts/check-install-lifecycle.mjs",
+    "check:npm-version": "node scripts/check-npm-version.mjs",
     "check:source-artifacts": "node scripts/check-source-artifacts.mjs",
+    "check:static-assets": "node scripts/check-static-assets.mjs",
+    "check:payment-leaks": "node scripts/check-payment-leaks.mjs",
+    "check:repo-malware": "node scripts/check-repo-malware.mjs",
+    "test:repo-malware": "node --test scripts/check-repo-malware.test.mjs",
+    "check:runtime-databases": "node scripts/check-runtime-databases.mjs",
+    "test:runtime-databases": "node --test scripts/check-runtime-databases.test.mjs",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
     "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.5",
-    "prettier": "^3.5.3",
+    "prettier": "^3.9.10",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.1"
+    "typescript-eslint": "^8.72.0"
   }
 }

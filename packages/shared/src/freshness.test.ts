@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+import {
+  DEFAULT_TIMESTAMP_MAX_AGE_MS,
+  isExpiredTimestamp,
+  isFreshTimestamp,
+  isStaleTimestamp,
+  parseTimestamp
+} from "./freshness.js";
+
+describe("timestamp freshness", () => {
+  const now = Date.parse("2026-08-31T12:00:00.000Z");
+
+  it("treats missing and malformed values as stale", () => {
+    expect(parseTimestamp(undefined)).toBeNull();
+    expect(parseTimestamp("not-a-date")).toBeNull();
+    expect(isFreshTimestamp(undefined, now)).toBe(false);
+    expect(isStaleTimestamp("not-a-date", now)).toBe(true);
+  });
+
+  it("treats whitespace-only timestamps as stale", () => {
+    expect(parseTimestamp("   ")).toBeNull();
+    expect(isFreshTimestamp("   ", now)).toBe(false);
+    expect(isStaleTimestamp("   ", now)).toBe(true);
+  });
+
+  it("uses an exclusive expiry boundary", () => {
+    const boundary = new Date(now - DEFAULT_TIMESTAMP_MAX_AGE_MS).toISOString();
+    expect(isFreshTimestamp(boundary, now)).toBe(false);
+    expect(
+      isFreshTimestamp(new Date(now - DEFAULT_TIMESTAMP_MAX_AGE_MS + 1).toISOString(), now)
+    ).toBe(true);
+  });
+
+  it("treats the exact boundary as expired", () => {
+    const boundary = new Date(now - DEFAULT_TIMESTAMP_MAX_AGE_MS).toISOString();
+    expect(isExpiredTimestamp(boundary, now)).toBe(true);
+    expect(isExpiredTimestamp(new Date(now - DEFAULT_TIMESTAMP_MAX_AGE_MS + 1).toISOString(), now)).toBe(
+      false
+    );
+  });
+
+  it("accepts current timestamps but rejects future timestamps", () => {
+    expect(isFreshTimestamp(new Date(now - 1).toISOString(), now)).toBe(true);
+    expect(isFreshTimestamp(new Date(now + 1).toISOString(), now)).toBe(false);
+  });
+});

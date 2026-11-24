@@ -1,0 +1,5 @@
+require_code_owner_reviews
+required_conversation_resolution
+dismiss_stale_reviews
+require_last_push_approval
+required_status_checks: quality

@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  applySponsorshipTestEnv,
-  resetSponsorshipStore
-} from "../test/sponsorship-test-helpers.js";
+import { applyApiTestEnv, resetApiTestStorage } from "../test/api-test-helpers.js";
 
 const executeQueryMock = vi.fn();
 
@@ -23,7 +20,16 @@ function mockQueryResult(traceId = "trace_x402") {
     timestamp: new Date().toISOString(),
     traceId,
     items: [],
-    source: "deterministic-fallback"
+    source: "deterministic-fallback",
+    execution: {
+      providerId: "search.basic",
+      source: "deterministic-fallback",
+      usedFallback: true,
+      fallbackReason: "deterministic-provider",
+      latencyEstimateMs: 700,
+      observedDurationMs: 8,
+      circuitBreakerState: "closed"
+    }
   });
 }
 
@@ -57,17 +63,19 @@ function demoPaidRequest(app: express.Express) {
 }
 
 describe("x402 idempotency", () => {
-  let dbPath: string | undefined;
+  let analyticsDbPath: string | undefined;
+  let sponsorshipDbPath: string | undefined;
 
   beforeEach(() => {
-    dbPath = applySponsorshipTestEnv();
+    ({ analyticsDbPath, sponsorshipDbPath } = applyApiTestEnv());
     executeQueryMock.mockReset();
     mockQueryResult();
   });
 
   afterEach(async () => {
-    await resetSponsorshipStore(dbPath);
-    dbPath = undefined;
+    await resetApiTestStorage(analyticsDbPath, sponsorshipDbPath);
+    analyticsDbPath = undefined;
+    sponsorshipDbPath = undefined;
   });
 
   it("returns cached response for idempotent retries", async () => {
@@ -76,9 +84,11 @@ describe("x402 idempotency", () => {
 
     const first = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
     expect(first.status).toBe(200);
+    expect(first.body.traceId).toBe(first.body.result.traceId);
 
     const second = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
     expect(second.status).toBe(200);
+    expect(second.body.traceId).toBe(first.body.traceId);
     expect(second.body.result.traceId).toBe(first.body.result.traceId);
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
   });
@@ -108,21 +118,35 @@ describe("x402 idempotency", () => {
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns cached response for payment proof replay without re-executing", async () => {
+  it("returns cached response for payment proof replay with the same body", async () => {
     const app = await createTestApp();
 
     const first = await demoPaidRequest(app).set("payment-response", "demo-proof-replay");
     expect(first.status).toBe(200);
 
-    const replay = await request(app)
+    const replay = await demoPaidRequest(app).set("payment-response", "demo-proof-replay");
+
+    expect(replay.status).toBe(200);
+    expect(replay.body.traceId).toBe(first.body.traceId);
+    expect(replay.body.result.traceId).toBe(first.body.result.traceId);
+    expect(executeQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects payment proof replay when the query body differs", async () => {
+    const app = await createTestApp();
+
+    const first = await demoPaidRequest(app).set("payment-response", "demo-proof-replay");
+    expect(first.status).toBe(200);
+
+    const conflict = await request(app)
       .get("/x402/search")
       .query({ provider: "search.basic", q: "different query" })
       .set("x-query402-demo-paid", "true")
       .set("x-demo-payer", "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF")
       .set("payment-response", "demo-proof-replay");
 
-    expect(replay.status).toBe(200);
-    expect(replay.body.result.traceId).toBe(first.body.result.traceId);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.error).toBe("payment_proof_conflict");
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
   });
 

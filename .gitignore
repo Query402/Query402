@@ -10,6 +10,15 @@ apps/api/data/*
 apps/api/apps/api/data/
 docs/ISSUE-9-AGENT-HANDOFF.md
 
+# Runtime SQLite databases and sidecars
+*.db
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+*-journal
+*.journal
+
 # TypeScript emit artifacts that must not live beside sources
 **/*.js.map
 **/*.d.ts.map

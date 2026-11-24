@@ -1,5 +1,10 @@
 import type Database from "better-sqlite3";
-import type { AnalyticsSummary, PaymentAttempt, UsageEvent } from "@query402/shared";
+import type {
+  AnalyticsSummary,
+  PaymentAttempt,
+  SettlementDigest,
+  UsageEvent
+} from "@query402/shared";
 import { DEFAULT_RECENT_LIMIT, MAX_PAYMENT_ATTEMPTS, MAX_USAGE_EVENTS } from "../constants.js";
 import {
   buildAnalyticsSummary,
@@ -24,12 +29,18 @@ INSERT INTO usage_events (
   id, mode, endpoint, provider_id, query_or_url, price_usd, network,
   payment_status, payment_kind, payment_tx_hash, asset, pay_to_address, amount,
   facilitator_url, payer_public_key, trace_id, created_at, latency_ms,
-  sponsorship_grant_id, policy_decision, payment_source, sponsor_public_key
+  execution_source, execution_used_fallback, execution_fallback_reason,
+  execution_latency_estimate_ms, execution_observed_duration_ms,
+  execution_circuit_breaker_state, sponsorship_grant_id, policy_decision,
+  payment_source, sponsor_public_key, price_outlier, price_outlier_reason
 ) VALUES (
   @id, @mode, @endpoint, @provider_id, @query_or_url, @price_usd, @network,
   @payment_status, @payment_kind, @payment_tx_hash, @asset, @pay_to_address, @amount,
   @facilitator_url, @payer_public_key, @trace_id, @created_at, @latency_ms,
-  @sponsorship_grant_id, @policy_decision, @payment_source, @sponsor_public_key
+  @execution_source, @execution_used_fallback, @execution_fallback_reason,
+  @execution_latency_estimate_ms, @execution_observed_duration_ms,
+  @execution_circuit_breaker_state, @sponsorship_grant_id, @policy_decision,
+  @payment_source, @sponsor_public_key, @price_outlier, @price_outlier_reason
 )
 `;
 
@@ -38,12 +49,12 @@ INSERT INTO payment_attempts (
   id, endpoint, provider_id, amount_usd, network, asset, amount, evidence_kind,
   payer_public_key, pay_to_address, facilitator_url, status, transaction_hash,
   facilitator_result, error, created_at, sponsorship_grant_id, policy_decision,
-  payment_source, sponsor_public_key
+  payment_source, sponsor_public_key, error_code
 ) VALUES (
   @id, @endpoint, @provider_id, @amount_usd, @network, @asset, @amount, @evidence_kind,
   @payer_public_key, @pay_to_address, @facilitator_url, @status, @transaction_hash,
   @facilitator_result, @error, @created_at, @sponsorship_grant_id, @policy_decision,
-  @payment_source, @sponsor_public_key
+  @payment_source, @sponsor_public_key, @error_code
 )
 `;
 
@@ -67,6 +78,42 @@ function trimPaymentAttempts(database: Database.Database): void {
       LIMIT -1 OFFSET ${MAX_PAYMENT_ATTEMPTS}
     );
   `);
+}
+
+function buildSettlementDigest(payments: PaymentAttempt[]): SettlementDigest {
+  const settledPayments = payments.filter((payment) => payment.status === "settled");
+  const settledAmountByAssetNetwork = settledPayments.reduce<Record<string, number>>(
+    (acc, payment) => {
+      const key =
+        payment.asset && payment.network ? `${payment.asset}:${payment.network}` : payment.network;
+      acc[key] = (acc[key] ?? 0) + payment.amountUsd;
+      return acc;
+    },
+    {}
+  );
+
+  const withPaymentEvidence = settledPayments.filter((payment) => {
+    return Boolean(payment.transactionHash || payment.facilitatorResult || payment.evidenceKind);
+  }).length;
+
+  const latestPaymentTimestamp = settledPayments.reduce<string | null>((latest, payment) => {
+    if (!latest || payment.createdAt > latest) {
+      return payment.createdAt;
+    }
+    return latest;
+  }, null);
+
+  return {
+    totalPaidRuns: settledPayments.length,
+    totalSettledAmountUsd: Number(
+      settledPayments.reduce((sum, payment) => sum + payment.amountUsd, 0).toFixed(6)
+    ),
+    settledAmountByAssetNetwork,
+    withPaymentEvidence,
+    missingPaymentEvidence: settledPayments.length - withPaymentEvidence,
+    latestPaymentTimestamp,
+    generatedAt: new Date().toISOString()
+  };
 }
 
 function defer<T>(operation: () => T): Promise<T> {
@@ -203,6 +250,17 @@ export class SqliteStorageRepository implements StorageRepository {
         recentUsageLimit,
         recentPaymentLimit
       });
+    });
+  }
+
+  async getSettlementDigest(): Promise<SettlementDigest> {
+    return defer(() => {
+      const database = getAnalyticsDb(this.dbPath);
+      const paymentRows = database
+        .prepare(`SELECT * FROM payment_attempts ORDER BY created_at DESC`)
+        .all() as Record<string, unknown>[];
+
+      return buildSettlementDigest(paymentRows.map(rowToPaymentAttempt));
     });
   }
 

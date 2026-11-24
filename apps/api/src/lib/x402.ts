@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import {
   paymentMiddlewareFromHTTPServer,
@@ -8,8 +9,26 @@ import { ExactStellarScheme } from "@x402/stellar/exact/server";
 import type { NextFunction, Request, Response } from "express";
 import type { HTTPRequestContext } from "@x402/core/server";
 import type { PaymentPayload } from "@x402/core/types";
-import { getProviderById, protectedRouteBasePrices } from "./pricing.js";
-import { config } from "./config.js";
+import {
+  assertPriceMatch,
+  buildChallengeAmountUnits,
+  getProviderById,
+  getProviderPriceUnits,
+  protectedRouteBasePrices,
+  unitsToUsdString,
+  usdStringToUnits,
+  PriceMismatchError,
+  UnsafePriceError,
+  ZeroPriceError
+} from "./pricing.js";
+import { config, requirePayToAddress } from "./config.js";
+import { buildPaymentDebugMetadata } from "./payment-debug.js";
+import { redactSensitiveObject } from "./redact-headers.js";
+import {
+  savePaymentAttempt,
+  updatePaymentAttemptEvidence,
+  updateUsageEventsByPaymentId
+} from "./persistence.js";
 import {
   buildDemoPaymentEvidence,
   buildEvidenceFromHttpContext,
@@ -18,6 +37,7 @@ import {
   persistPaymentEvidence,
   requestFromHttpContext,
   requirementsFromPaymentHeader,
+  routeModeFromPath,
   setPaymentEvidence
 } from "./payment-evidence.js";
 
@@ -32,6 +52,43 @@ const basePriceByMode: Record<RouteMode, string> = {
   scrape: protectedRouteBasePrices["GET /x402/scrape"] ?? "$0.02"
 };
 
+const PAYMENT_HEADER_CANDIDATES = ["payment", "payment-signature", "x-payment"] as const;
+
+function isProtectedX402Route(path: string): boolean {
+  return path === "/x402/search" || path === "/x402/news" || path === "/x402/scrape";
+}
+
+function extractAnyPaymentHeader(req: Request): string | undefined {
+  for (const name of PAYMENT_HEADER_CANDIDATES) {
+    const value = req.header(name);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getProviderIdFromRequest(req: Request): string {
+  const providerId = Array.isArray(req.query.provider)
+    ? req.query.provider[0]
+    : (req.query.provider ?? "unknown");
+  return typeof providerId === "string" ? providerId : "unknown";
+}
+
+function getExpectedPriceForRequest(req: Request): string {
+  const mode = routeModeFromPath(req.path);
+  if (!mode) {
+    return "$0.01";
+  }
+  const basePrice = basePriceByMode[mode as RouteMode];
+  const pId = getProviderIdFromRequest(req);
+  const p = getProviderById(pId);
+  if (p && p.category === mode) {
+    return formatUsdPrice(p.priceUsd);
+  }
+  return basePrice;
+}
+
 function getProviderFromContext(context: HTTPRequestContext) {
   const rawProvider =
     context.adapter.getQueryParam?.("provider") ?? context.adapter.getQueryParams?.()["provider"];
@@ -43,7 +100,7 @@ function getProviderFromContext(context: HTTPRequestContext) {
   return rawProvider;
 }
 
-function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
+export function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
   const providerId = getProviderFromContext(context);
   if (!providerId) {
     return basePriceByMode[mode];
@@ -55,6 +112,45 @@ function resolveRoutePrice(context: HTTPRequestContext, mode: RouteMode) {
   }
 
   return formatUsdPrice(provider.priceUsd);
+}
+
+export function resolveRoutePriceUnits(context: HTTPRequestContext, mode: RouteMode): number {
+  const providerId = getProviderFromContext(context);
+  if (!providerId) {
+    return usdStringToUnits(basePriceByMode[mode]);
+  }
+
+  const provider = getProviderById(providerId);
+  if (!provider || provider.category !== mode) {
+    return usdStringToUnits(basePriceByMode[mode]);
+  }
+
+  return getProviderPriceUnits(providerId);
+}
+
+export function buildRouteChallengePrice(context: HTTPRequestContext, mode: RouteMode): string {
+  const providerId = getProviderFromContext(context);
+  if (!providerId) {
+    const baseUnits = usdStringToUnits(basePriceByMode[mode]);
+    if (baseUnits === 0) {
+      throw new ZeroPriceError(mode);
+    }
+    return unitsToUsdString(baseUnits);
+  }
+
+  const provider = getProviderById(providerId);
+  if (!provider || provider.category !== mode) {
+    const baseUnits = usdStringToUnits(basePriceByMode[mode]);
+    if (baseUnits === 0) {
+      throw new ZeroPriceError(mode);
+    }
+    return unitsToUsdString(baseUnits);
+  }
+
+  const catalogUnits = getProviderPriceUnits(providerId);
+  const challengeUnits = buildChallengeAmountUnits(providerId);
+  assertPriceMatch(challengeUnits, catalogUnits);
+  return unitsToUsdString(challengeUnits);
 }
 
 function clonePaymentPayload(paymentPayload: unknown): PaymentPayload | undefined {
@@ -70,6 +166,18 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
+  // Fail closed: never advertise payment requirements or record demo
+  // evidence with an empty pay-to address.
+  if (!config.X402_PAY_TO_ADDRESS) {
+    res.set("Cache-Control", "no-store");
+    return res.status(503).json({
+      error: "Payment configuration missing",
+      demoMode: true,
+      detail:
+        "X402_PAY_TO_ADDRESS is not configured. Paid demo requests are disabled until a pay-to address is set."
+    });
+  }
+
   const paidHeader = req.header("x-query402-demo-paid");
 
   if (paidHeader === "true") {
@@ -77,32 +185,137 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
       setPaymentEvidence(req, buildDemoPaymentEvidence(req));
     } catch (error) {
       return next(error);
-    }
+  }
     return next();
   }
 
   const routeKey = `${req.method.toUpperCase()} ${req.path}`;
   const price = protectedRouteBasePrices[routeKey] ?? "$0.01";
 
-  return res.status(402).json({
-    error: "Payment Required",
-    demoMode: true,
-    accepts: {
-      scheme: "exact",
-      network: config.STELLAR_NETWORK,
-      price,
-      payTo: config.X402_PAY_TO_ADDRESS,
-      facilitator: config.X402_FACILITATOR_URL
-    },
-    instructions:
-      "For deterministic demo mode, retry with header x-query402-demo-paid: true. Demo evidence is recorded separately from settled x402 payments."
+  const providerId = Array.isArray(req.query.provider)
+    ? req.query.provider[0]
+    : (req.query.provider ?? "unknown");
+
+  const debug = buildPaymentDebugMetadata({
+    failureType: "payment_required",
+    route: req.path,
+    providerId: typeof providerId === "string" ? providerId : "unknown",
+    expectedPrice: price
   });
+
+  res.set("Cache-Control", "no-store");
+  return res.status(402).json(
+    redactSensitiveObject({
+      error: "Payment Required",
+      errorCode: "payment_required",
+      demoMode: true,
+      debug,
+      accepts: {
+        scheme: "exact",
+        network: config.STELLAR_NETWORK,
+        price,
+        payTo: config.X402_PAY_TO_ADDRESS,
+        facilitator: config.X402_FACILITATOR_URL
+      },
+      instructions:
+        "For deterministic demo mode, retry with header x-query402-demo-paid: true. Demo evidence is recorded separately from settled x402 payments."
+    })
+  );
 }
+
+export const getX402LifecycleHandlers = (network: string) => ({
+  onAfterVerify: async (ctx: any) => {
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
+
+    if (req) {
+      const paymentId = `pay_${nanoid(10)}`;
+      req.headers["x-payment-attempt-id"] = paymentId;
+
+      const providerId = getProviderFromContext(ctx.transportContext) ?? "unknown";
+
+      savePaymentAttempt({
+        id: paymentId,
+        endpoint: req.path,
+        providerId,
+        amountUsd: Number(ctx.requirements.amount),
+        network,
+        payToAddress: ctx.requirements.payTo,
+        facilitatorUrl: config.X402_FACILITATOR_URL,
+        status: "verified",
+        evidence: {
+          status: "verified",
+          network,
+          amountUsd: Number(ctx.requirements.amount),
+          payToAddress: ctx.requirements.payTo,
+          facilitatorUrl: config.X402_FACILITATOR_URL,
+          paymentPayload:
+            typeof ctx.paymentPayload === "string"
+              ? ctx.paymentPayload
+              : JSON.stringify(ctx.paymentPayload)
+        },
+        createdAt: new Date().toISOString()
+      });
+    }
+  },
+
+  onAfterSettle: async (ctx: any) => {
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
+    const paymentId = req?.headers?.["x-payment-attempt-id"] as string | undefined;
+
+    if (paymentId) {
+      const evidence = {
+        status: "settled" as const,
+        network,
+        amountUsd: Number(ctx.requirements.amount),
+        payToAddress: ctx.requirements.payTo,
+        facilitatorUrl: config.X402_FACILITATOR_URL,
+        transactionHash: ctx.result.transaction,
+        paymentPayload:
+          typeof ctx.paymentPayload === "string"
+            ? ctx.paymentPayload
+            : JSON.stringify(ctx.paymentPayload)
+      };
+      updatePaymentAttemptEvidence(paymentId, evidence);
+      updateUsageEventsByPaymentId(paymentId, evidence);
+    }
+  },
+
+  onSettleFailure: async (ctx: any) => {
+    const transport = ctx.transportContext as { request?: Request; req?: Request } | Request;
+    const req = "headers" in transport ? transport : transport.request || transport.req;
+    const paymentId = req?.headers?.["x-payment-attempt-id"] as string | undefined;
+
+    if (paymentId) {
+      const evidence = {
+        status: "failed" as const,
+        network,
+        amountUsd: Number(ctx.requirements.amount),
+        payToAddress: ctx.requirements.payTo,
+        facilitatorUrl: config.X402_FACILITATOR_URL,
+        error: ctx.error?.message ?? "Payment settlement failed",
+        paymentPayload: ctx.paymentPayload
+          ? typeof ctx.paymentPayload === "string"
+            ? ctx.paymentPayload
+            : JSON.stringify(ctx.paymentPayload)
+          : undefined
+      };
+
+      updatePaymentAttemptEvidence(paymentId, evidence);
+      updateUsageEventsByPaymentId(paymentId, evidence);
+    }
+  }
+});
 
 export function createX402Middleware() {
   if (config.demoMode) {
     return demoMode402Middleware;
   }
+
+  // Real paid routes are enabled: fail closed at startup rather than
+  // generating x402 payment requirements with an empty pay-to address.
+  const payTo = requirePayToAddress();
 
   const network = config.STELLAR_NETWORK as `${string}:${string}`;
 
@@ -145,9 +358,27 @@ export function createX402Middleware() {
       (req as EvidenceRequest).paymentEvidencePersisted = true;
     }
 
+    const providerId = getProviderFromContext(context) ?? "unknown";
+    const mode = routeModeFromPath(context.path) ?? "search";
+    const expectedPrice = resolveRoutePrice(context, mode);
+
+    const debug = buildPaymentDebugMetadata({
+      failureType: "settlement_failed",
+      route: context.path,
+      providerId,
+      expectedPrice,
+      facilitatorStatus: settleResult.errorReason,
+      paymentHeader: context.paymentHeader
+    });
+
     return {
       contentType: "application/json",
-      body: { error: "Payment settlement failed", type: "payment_settlement_failed" }
+      body: redactSensitiveObject({
+        error: "Payment settlement failed",
+        type: "payment_settlement_failed",
+        errorCode: "payment_invalid",
+        debug
+      })
     };
   };
 
@@ -156,8 +387,8 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "search"),
-        payTo: config.X402_PAY_TO_ADDRESS
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "search"),
+        payTo
       },
       description: "Paid search endpoint on Query402",
       settlementFailedResponseBody
@@ -166,8 +397,8 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "news"),
-        payTo: config.X402_PAY_TO_ADDRESS
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "news"),
+        payTo
       },
       description: "Paid news endpoint on Query402",
       settlementFailedResponseBody
@@ -176,8 +407,8 @@ export function createX402Middleware() {
       accepts: {
         scheme: "exact",
         network,
-        price: (context: HTTPRequestContext) => resolveRoutePrice(context, "scrape"),
-        payTo: config.X402_PAY_TO_ADDRESS
+        price: (context: HTTPRequestContext) => buildRouteChallengePrice(context, "scrape"),
+        payTo
       },
       description: "Paid scrape endpoint on Query402",
       settlementFailedResponseBody
@@ -211,5 +442,82 @@ export function createX402Middleware() {
   });
 
   const httpServer = new x402HTTPResourceServer(resourceServer, routeConfig);
-  return paymentMiddlewareFromHTTPServer(httpServer);
+  const paymentMiddleware = paymentMiddlewareFromHTTPServer(httpServer);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (isProtectedX402Route(req.path)) {
+      const rawHeader = extractAnyPaymentHeader(req);
+      if (rawHeader === undefined) {
+        const debug = buildPaymentDebugMetadata({
+          failureType: "no_payment_header",
+          route: req.path,
+          providerId: getProviderIdFromRequest(req),
+          expectedPrice: getExpectedPriceForRequest(req)
+        });
+        return res.status(400).json({
+          error: "Payment header is required",
+          type: "no_payment_header",
+          errorCode: "no_payment_header",
+          debug
+        });
+      }
+
+      if (rawHeader.trim() === "") {
+        const debug = buildPaymentDebugMetadata({
+          failureType: "invalid_payment_header",
+          route: req.path,
+          providerId: getProviderIdFromRequest(req),
+          expectedPrice: getExpectedPriceForRequest(req),
+          paymentHeader: rawHeader
+        });
+        return res.status(400).json({
+          error: "Payment header is blank",
+          type: "invalid_payment_header",
+          errorCode: "invalid_payment_header",
+          debug
+        });
+      }
+    }
+
+    // Prevent browsers and proxies from caching sensitive payment evidence.
+    if (req.path.startsWith("/x402/")) {
+      res.set("Cache-Control", "no-store");
+    }
+    const originalJson = res.json.bind(res);
+    res.json = function (body: unknown) {
+      if (
+        res.statusCode === 402 &&
+        body &&
+        typeof body === "object" &&
+        !("debug" in (body as Record<string, unknown>))
+      ) {
+        const pId = Array.isArray(req.query.provider)
+          ? req.query.provider[0]
+          : (req.query.provider ?? "unknown");
+        const paymentHeader =
+          req.header("payment-signature") ?? req.header("x-payment") ?? undefined;
+        const mode = routeModeFromPath(req.path);
+        let expectedPrice = "$0.01";
+        if (mode) {
+          expectedPrice = basePriceByMode[mode as RouteMode];
+          if (typeof pId === "string") {
+            const p = getProviderById(pId);
+            if (p && p.category === mode) {
+              expectedPrice = formatUsdPrice(p.priceUsd);
+            }
+          }
+        }
+        const debug = buildPaymentDebugMetadata({
+          failureType: "payment_required",
+          route: req.path,
+          providerId: typeof pId === "string" ? pId : "unknown",
+          expectedPrice,
+          paymentHeader
+        });
+        return originalJson(redactSensitiveObject({ ...(body as Record<string, unknown>), debug }));
+      }
+      return originalJson(redactSensitiveObject(body));
+    };
+    return paymentMiddleware(req, res, next);
+  };
 }

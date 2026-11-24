@@ -34,7 +34,7 @@ export default function LandingPage() {
       <div className="lpx-wrap lift-in">
         <header className="lpx-topbar">
           <div className="lpx-brand">
-            <img src="/assets/query402-logo.png" alt="Query402 logo" />
+            <img src="/assets/query402-logo.webp" alt="Query402 logo" />
             <div>
               <p>Query402</p>
               <span>Agentic payment rail on Stellar</span>
@@ -75,7 +75,7 @@ export default function LandingPage() {
             </a>
           </div>
           <div className="lpx-hero-glow">
-            <img src="/assets/query402-logo.png" alt="Query402 emblem" />
+            <img src="/assets/query402-logo.webp" alt="Query402 emblem" />
           </div>
         </section>
 

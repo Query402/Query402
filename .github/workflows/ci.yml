@@ -6,23 +6,64 @@ on:
   pull_request:
     branches: [main]
 
+# CI never pushes changes back to the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Placeholder values — no real credentials needed in CI
+  DEMO_MODE: "true"
+  STELLAR_NETWORK: "stellar:testnet"
+  STELLAR_RPC_URL: "https://soroban-testnet.stellar.org"
+  X402_FACILITATOR_URL: "https://channels.openzeppelin.com/x402/testnet"
+  X402_PAY_TO_ADDRESS: "INVALID_DEMO_PAY_TO_ADDRESS"
+  DEMO_CLIENT_SECRET_KEY: "INVALID_DEMO_SECRET_KEY"
+  DEMO_CLIENT_PUBLIC_KEY: "INVALID_DEMO_PUBLIC_KEY"
+  PORT_API: "3001"
+  API_BASE_URL: "http://localhost:3001"
+  VITE_API_BASE_URL: "http://localhost:3001"
+
 jobs:
+  # ── Existing quality gates (unchanged) ─────────────────────────────────────
   quality:
     runs-on: ubuntu-latest
+    # Bound total job runtime so a hung install, build, or test step fails fast (<= 20 min)
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      - name: Check dependency sources
+        run: node scripts/check-lock-sources.mjs
+
+      - name: Check install lifecycle scripts
+        run: node scripts/check-install-lifecycle.mjs
+
+      - name: Repository malware guard
+        run: |
+          node scripts/check-repo-malware.mjs
+          node --test scripts/check-repo-malware.test.mjs
+
+      - name: Verify npm major version
+        run: node scripts/check-npm-version.mjs
+
+      - name: Static asset guard
+        run: |
+          node --test scripts/check-static-assets.test.mjs
+          node scripts/check-static-assets.mjs
 
       - name: Install dependencies
         run: npm ci
@@ -44,3 +85,87 @@ jobs:
 
       - name: Source artifact guard
         run: npm run check:source-artifacts
+
+      - name: Runtime database guard
+        run: npm run check:runtime-databases
+
+  # ── Demo transcript ─────────────────────────────────────────────────────────
+  demo-transcript:
+    runs-on: ubuntu-latest
+    needs: quality
+    # Bound total job runtime so a hung background API or transcript run cannot stall the runner (<= 20 min)
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Check dependency sources
+        run: node scripts/check-lock-sources.mjs
+
+      - name: Check install lifecycle scripts
+        run: node scripts/check-install-lifecycle.mjs
+
+      - name: Verify npm major version
+        run: node scripts/check-npm-version.mjs
+
+      - name: Static asset guard
+        run: node scripts/check-static-assets.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Start the API in DEMO_MODE as a background service
+      - name: Start API (DEMO_MODE=true)
+        run: |
+          DEMO_MODE=true PORT_API=3001 NODE_ENV=test \
+            npm run start --workspace @query402/api &
+          echo "API_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for API readiness
+        run: |
+          echo -n "Waiting for /health"
+          for i in $(seq 1 30); do
+            if curl -sf "$API_BASE_URL/health" > /dev/null 2>&1; then
+              echo " ✓"; exit 0
+            fi
+            echo -n "."; sleep 1
+          done
+          echo ""; echo "ERROR: API did not become ready in 30 s."; exit 1
+
+      # Run transcript.ts via the dedicated npm script
+      - name: Generate demo transcript
+        run: |
+          DEMO_MODE=true API_BASE_URL="$API_BASE_URL" \
+            npm run demo:transcript --workspace @query402/agent-client
+
+      # Security gate — fail the job if any secret pattern appears in the artifact
+      - name: Assert no secrets in transcript
+        run: |
+          echo "Scanning transcript/ for leaked secrets…"
+          node scripts/check-payment-leaks.mjs transcript/
+
+      # Reviewers only need the sanitized transcript while the run is still open.
+      - name: Upload transcript artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: demo-transcript-${{ github.run_id }}
+          path: transcript/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Stop API
+        if: always()
+        run: |
+          [[ -n "${API_PID:-}" ]] && kill "$API_PID" 2>/dev/null || true

@@ -127,4 +127,34 @@ describe("sponsorship budget store", () => {
     expect(await readWalletBudgetSpent(TEST_WALLET)).toBeCloseTo(0, 6);
     expect(await readGlobalBudgetSpent()).toBeCloseTo(0, 6);
   });
+
+  it("allows only one of two overlapping grants to spend the last unit", async () => {
+    dbPath = applySponsorshipTestEnv({
+      SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD: "0.01",
+      SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD: "0.01"
+    });
+    const { checkAndReserveBudget, SponsorshipBudgetExceededError } = await import("./budget.js");
+
+    const first = await createSignedGrant();
+    const second = await createSignedGrant();
+
+    checkAndReserveBudget({
+      wallet: TEST_WALLET,
+      amountUsd: 0.01,
+      nonce: first.grant.nonce,
+      grantId: first.grant.grantId
+    });
+
+    expect(() =>
+      checkAndReserveBudget({
+        wallet: OTHER_WALLET,
+        amountUsd: 0.01,
+        nonce: second.grant.nonce,
+        grantId: second.grant.grantId
+      })
+    ).toThrow(SponsorshipBudgetExceededError);
+
+    expect(await readWalletBudgetSpent(TEST_WALLET)).toBeCloseTo(0.01, 6);
+    expect(await readGlobalBudgetSpent()).toBeCloseTo(0.01, 6);
+  });
 });

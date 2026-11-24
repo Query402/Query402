@@ -87,7 +87,25 @@ export class FreighterAdapter implements WalletAdapter {
     }
   }
 
+  /**
+   * Refuse to open a Freighter signature prompt unless the wallet network
+   * matches the API payment network (opts or last connect target).
+   */
+  private async assertConnectedNetwork(opts?: { networkPassphrase?: string }) {
+    const expected = opts?.networkPassphrase ?? this.currentTargetPassphrase;
+    if (!expected) return;
+
+    const networkRes = await getNetworkDetails();
+    if (networkRes.error || !networkRes.networkPassphrase) {
+      throw new Error("Failed to get network details");
+    }
+    if (networkRes.networkPassphrase !== expected) {
+      throw new Error(`Wrong network. Expected ${expected}`);
+    }
+  }
+
   async signTransaction(xdr: string, opts?: { networkPassphrase?: string }) {
+    await this.assertConnectedNetwork(opts);
     const res = await signTransaction(xdr, opts);
     if (res.error || !res.signedTxXdr) {
       if (this.isUserRejection(res.error)) {
@@ -102,6 +120,7 @@ export class FreighterAdapter implements WalletAdapter {
   }
 
   async signAuthEntry(xdr: string, opts?: { networkPassphrase?: string }) {
+    await this.assertConnectedNetwork(opts);
     const res = await signAuthEntry(xdr, opts);
     if (res.error || !res.signedAuthEntry) {
       if (this.isUserRejection(res.error)) {

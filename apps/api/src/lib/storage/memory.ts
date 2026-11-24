@@ -1,4 +1,9 @@
-import type { AnalyticsSummary, PaymentAttempt, UsageEvent } from "@query402/shared";
+import type {
+  AnalyticsSummary,
+  PaymentAttempt,
+  SettlementDigest,
+  UsageEvent
+} from "@query402/shared";
 import { MAX_PAYMENT_ATTEMPTS, MAX_USAGE_EVENTS } from "./constants.js";
 import { buildAnalyticsSummary } from "./serialization.js";
 import type {
@@ -13,6 +18,42 @@ const PENDING_STATUS_CODE = 0;
 
 function trimNewest<T>(items: T[], max: number): T[] {
   return items.slice(0, max);
+}
+
+function buildSettlementDigest(payments: PaymentAttempt[]): SettlementDigest {
+  const settledPayments = payments.filter((payment) => payment.status === "settled");
+  const settledAmountByAssetNetwork = settledPayments.reduce<Record<string, number>>(
+    (acc, payment) => {
+      const key =
+        payment.asset && payment.network ? `${payment.asset}:${payment.network}` : payment.network;
+      acc[key] = (acc[key] ?? 0) + payment.amountUsd;
+      return acc;
+    },
+    {}
+  );
+
+  const withPaymentEvidence = settledPayments.filter((payment) => {
+    return Boolean(payment.transactionHash || payment.facilitatorResult || payment.evidenceKind);
+  }).length;
+
+  const latestPaymentTimestamp = settledPayments.reduce<string | null>((latest, payment) => {
+    if (!latest || payment.createdAt > latest) {
+      return payment.createdAt;
+    }
+    return latest;
+  }, null);
+
+  return {
+    totalPaidRuns: settledPayments.length,
+    totalSettledAmountUsd: Number(
+      settledPayments.reduce((sum, payment) => sum + payment.amountUsd, 0).toFixed(6)
+    ),
+    settledAmountByAssetNetwork,
+    withPaymentEvidence,
+    missingPaymentEvidence: settledPayments.length - withPaymentEvidence,
+    latestPaymentTimestamp,
+    generatedAt: new Date().toISOString()
+  };
 }
 
 export class InMemoryStorageRepository implements StorageRepository {
@@ -80,6 +121,10 @@ export class InMemoryStorageRepository implements StorageRepository {
 
   async getAnalyticsSummary(options?: AnalyticsQueryOptions): Promise<AnalyticsSummary> {
     return buildAnalyticsSummary(this.usage, this.payments, options);
+  }
+
+  async getSettlementDigest(): Promise<SettlementDigest> {
+    return buildSettlementDigest(this.payments);
   }
 
   private purgeExpiredIdempotency(key: string): void {

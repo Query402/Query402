@@ -1,4 +1,8 @@
-import { getProviderById, providers } from "../lib/pricing.js";
+import {
+  runProviderAfterConfirmation,
+  type FacilitatorPaymentResult
+} from "../lib/facilitator-check.js";
+import { getProviderById, providers, validateProviderCatalog } from "../lib/pricing.js";
 import { registry } from "../providers/index.js";
 import { nanoid } from "nanoid";
 import { QueryResult } from "@query402/shared";
@@ -21,13 +25,13 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function sanitizeErrorMessage(message: string): string {
+export function sanitizeErrorMessage(message: string): string {
   return message
+    .replace(/\b(url|targetUrl)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi, "$1=[redacted-url]")
     .replace(
-      /\b(url|targetUrl)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi,
-      "$1=[redacted-url]"
+      /\b(payment-response|x-payment-response|authorization)\b\s*[:=]\s*([^\s,;]+)/gi,
+      "$1=[redacted]"
     )
-    .replace(/\b(payment-response|x-payment-response|authorization)\b\s*[:=]\s*([^\s,;]+)/gi, "$1=[redacted]")
     .replace(
       /\b(query|queryOrUrl|q|secret|api[_ -]?key|token|private[_ -]?key|privateKey|seed)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,;]+)/gi,
       "$1=[redacted]"
@@ -35,11 +39,46 @@ function sanitizeErrorMessage(message: string): string {
     .replace(/https?:\/\/\S+/gi, "[redacted-url]");
 }
 
-export async function executeQuery(params: {
+export class ProviderTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderTimeoutError";
+  }
+}
+
+export class ProviderFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderFailedError";
+  }
+}
+
+export async function executeQuery(
+  params: {
+    mode: "search" | "news" | "scrape";
+    provider: string;
+    q?: string;
+    url?: string;
+  },
+  options?: { facilitatorResult: FacilitatorPaymentResult | null }
+): Promise<QueryResult> {
+  if (options) {
+    return runProviderAfterConfirmation({
+      providerId: params.provider,
+      facilitatorResult: options.facilitatorResult,
+      run: () => executeQueryBody(params)
+    });
+  }
+
+  return executeQueryBody(params);
+}
+
+async function executeQueryBody(params: {
   mode: "search" | "news" | "scrape";
   provider: string;
   q?: string;
   url?: string;
+  paymentReference?: string;
 }): Promise<QueryResult> {
   const providerDef = getProviderById(params.provider);
   if (!providerDef) {
@@ -53,12 +92,18 @@ export async function executeQuery(params: {
 
   const safeInput = params.mode === "scrape" ? await validateScrapeUrl(queryOrUrl) : queryOrUrl;
 
-  // Registry handles provider matching, circuit breaking, timeouts, and fallbacks
-  const start = Date.now();
+  // Build context for paid query providers (news and search)
+  const context =
+    params.mode === "news" || params.mode === "search"
+      ? {
+          paymentReference: params.paymentReference ?? "",
+          safetyPassed: true // news/search queries don't require URL safety validation
+        }
+      : undefined;
 
   let execution;
   try {
-    execution = await registry.execute(params.mode, params.provider, safeInput);
+    execution = await registry.execute(params.mode, params.provider, safeInput, context);
   } catch (error) {
     logger.error(
       {
@@ -69,10 +114,14 @@ export async function executeQuery(params: {
       },
       "provider execution failed"
     );
-    throw error;
+    const msg = getErrorMessage(error);
+    if (msg.toLowerCase().includes("timeout")) {
+      throw new ProviderTimeoutError(msg);
+    }
+    throw new ProviderFailedError(msg);
   }
 
-  const latencyMs = Date.now() - start;
+  const latencyMs = execution.execution.observedDurationMs;
 
   return {
     mode: params.mode,
@@ -84,6 +133,7 @@ export async function executeQuery(params: {
     traceId: `trace_${nanoid(12)}`,
     items: execution.items,
     source: execution.source,
+    execution: execution.execution,
     raw: {
       queryOrUrl: safeInput,
       adapterId: params.provider
@@ -92,6 +142,7 @@ export async function executeQuery(params: {
 }
 
 export function getCatalog() {
+  validateProviderCatalog();
   const byCategory = {
     search: providers.filter((provider) => provider.category === "search"),
     news: providers.filter((provider) => provider.category === "news"),
@@ -103,5 +154,52 @@ export function getCatalog() {
     providerCount: providers.length,
     providers,
     byCategory
+  };
+}
+
+import { getUsageEvents } from "../lib/persistence.js";
+import { formatPrivacySafeAnalytics } from "./analytics-privacy.js";
+import { PaginatedAnalyticsResponse } from "@query402/shared";
+
+/**
+ * Fetches privacy-safe, cursor-paginated analytics data from the JSON file layer.
+ */
+export async function fetchPaginatedAnalytics(
+  limit: number = 10,
+  cursor: string | null = null
+): Promise<PaginatedAnalyticsResponse> {
+  // 1. Read all logs from our local JSON file storage engine
+  const allEvents = await getUsageEvents();
+
+  let sliceStartIndex = 0;
+
+  // 2. If a cursor is provided, find its index to start our next page chunk
+  if (cursor) {
+    const cursorIndex = allEvents.findIndex((event: any) => event.id === cursor);
+    if (cursorIndex !== -1) {
+      // Start slicing immediately after the cursor item
+      sliceStartIndex = cursorIndex + 1;
+    }
+  }
+
+  // 3. Extract the chunk + 1 extra item to check if a next page exists
+  const fetchCount = limit + 1;
+  const pageChunk = allEvents.slice(sliceStartIndex, sliceStartIndex + fetchCount);
+
+  const hasMore = pageChunk.length > limit;
+  // Trim down to the requested page limit
+  const validRecords = hasMore ? pageChunk.slice(0, limit) : pageChunk;
+
+  // 4. Filter and mask the records safely via our privacy module
+  const cleanData = formatPrivacySafeAnalytics(validRecords);
+
+  // 5. Pick the ID of the last element in our current view as the next cursor token
+  const nextCursor = hasMore && cleanData.length > 0 ? cleanData[cleanData.length - 1].id : null;
+
+  return {
+    success: true,
+    hasMore,
+    nextCursor,
+    data: cleanData
   };
 }

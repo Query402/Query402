@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { NextFunction, Request, Response } from "express";
 import type { PaymentAttempt, QueryMode, UsageEvent } from "@query402/shared";
+import { buildPaymentProofLinks, isExpiredTimestamp } from "@query402/shared";
 import type {
   PaymentPayload,
   PaymentRequirements,
@@ -8,7 +9,7 @@ import type {
   VerifyResponse
 } from "@x402/core/types";
 import type { HTTPRequestContext } from "@x402/core/server";
-import { config } from "./config.js";
+import { config, requirePayToAddress } from "./config.js";
 import { getProviderById } from "./pricing.js";
 import { persistPaymentAndUsage, savePaymentAttempt } from "./persistence.js";
 
@@ -167,14 +168,7 @@ export function assertRequestMatchesEvidence(req: Request, evidence: PaymentEvid
   assertPriceMatchesProvider(evidence);
 }
 
-export function buildEvidenceFromRequirements(input: {
-  req: Request;
-  requirements: PaymentRequirements;
-  paymentPayload?: PaymentPayload;
-  verifyResult?: VerifyResponse;
-  settleResult?: SettleResponse;
-  failure?: string;
-}): PaymentEvidence {
+export function buildEvidenceFromRequirements(input: {}): PaymentEvidence {
   const mode = routeModeFromPath(input.req.path);
   const providerId = getProviderFromRequest(input.req);
   if (!mode || typeof providerId !== "string") {
@@ -294,7 +288,7 @@ export function buildDemoPaymentEvidence(req: Request): DemoPaymentEvidence {
     providerId,
     amountUsd,
     network: config.STELLAR_NETWORK,
-    payTo: config.X402_PAY_TO_ADDRESS,
+    payTo: requirePayToAddress(),
     facilitatorUrl: config.X402_FACILITATOR_URL,
     payer: req.header("x-demo-payer") ?? "demo-agent"
   };
@@ -348,6 +342,7 @@ export async function persistPaymentEvidence(
     facilitatorResult:
       "facilitatorResult" in evidence ? toJsonRecord(evidence.facilitatorResult) : undefined,
     error: evidence.kind === "failed" ? evidence.error : undefined,
+    errorCode: evidence.kind === "failed" ? "payment_invalid" : undefined,
     createdAt: now
   };
 
@@ -390,7 +385,14 @@ export function paymentEvidenceSummary(evidence: PaymentEvidence) {
     payTo: evidence.payTo,
     facilitatorUrl: evidence.facilitatorUrl,
     payer: evidence.payer,
-    transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined
+    transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined,
+    proofLinks: buildPaymentProofLinks({
+      transactionHash: evidence.kind === "settled" ? evidence.transactionHash : undefined,
+      payerPublicKey: evidence.payer,
+      payToAddress: evidence.payTo,
+      network: evidence.network,
+      asset: evidence.asset
+    })
   };
 }
 
@@ -401,8 +403,22 @@ export function requirePaymentEvidence(req: Request, res: Response, next: NextFu
       throw new PaymentEvidenceError("Payment evidence is missing");
     }
     assertRequestMatchesEvidence(req, evidence);
-    return next();
+    next();
   } catch (error) {
-    return next(error);
+    next(error);
+  }
+}
+
+export function assertPaymentProofFresh(
+  evidence: PaymentEvidence,
+  now: Date | number = Date.now(),
+  maxAgeMs?: number
+) {
+  const timestamp =
+    "facilitatorResult" in evidence && evidence.facilitatorResult
+      ? (evidence.facilitatorResult as { timestamp?: unknown }).timestamp
+      : undefined;
+  if (isExpiredTimestamp(timestamp, now, maxAgeMs)) {
+    throw new PaymentEvidenceError("Payment proof has expired");
   }
 }

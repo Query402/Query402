@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAX_PAYMENT_ATTEMPTS, MAX_USAGE_EVENTS } from "./constants.js";
 import { createInMemoryStorageRepository } from "./memory.js";
@@ -6,8 +7,9 @@ import { buildTestPaymentAttempt, buildTestUsageEvent } from "../../test/storage
 
 describe("storage paths", () => {
   it("resolves relative data paths from the API package root", () => {
-    expect(resolveApiDataPath("data/analytics.db")).toMatch(/apps\/api\/data\/analytics\.db$/);
-    expect(resolveApiDataPath("data/analytics.db")).not.toContain("/src/data/");
+    const resolved = resolveApiDataPath("data/analytics.db");
+    expect(resolved).toMatch(/apps[/\\]api[/\\]data[/\\]analytics\.db$/);
+    expect(resolved).not.toContain(`${path.sep}src${path.sep}data${path.sep}`);
   });
 });
 

@@ -2,6 +2,11 @@
   "name": "@query402/agent-client",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Query402/Query402"
+  },
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "prebuild": "npm --prefix ../../packages/shared run build",
@@ -9,26 +14,27 @@
     "dev": "tsx src/cli.ts",
     "cli": "tsx src/cli.ts",
     "demo": "tsx src/demo.ts",
+    "demo:transcript": "tsx src/transcript.ts",
     "validate:real": "tsx src/validate-real.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --test-timeout=30000",
     "lint": "eslint src",
     "format": "prettier --write src",
     "format:check": "prettier --check src"
   },
   "dependencies": {
     "@query402/shared": "0.1.0",
-    "@x402/core": "^2.17.0",
-    "@x402/fetch": "^2.17.0",
-    "@x402/stellar": "^2.17.0",
+    "@x402/core": "^2.28.0",
+    "@x402/fetch": "^2.28.0",
+    "@x402/stellar": "^2.28.0",
     "dotenv": "^16.5.0",
     "nanoid": "^5.1.5",
     "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/node": "^22.15.17",
-    "tsx": "^4.19.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

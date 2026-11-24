@@ -232,6 +232,17 @@ describe("POST /api/paid/run sponsorship", () => {
     expect(await readGlobalBudgetSpent()).toBeCloseTo(0.01, 6);
   });
 
+  it("includes Cache-Control: no-store on 200 response", async () => {
+    dbPath = applySponsorshipTestEnv();
+    const app = await createTestApp();
+    const signedGrant = await createSignedGrant();
+
+    const response = await postPaidRun(app, signedGrant);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+  });
+
   it("returns 503 and skips payment when sponsorship is disabled", async () => {
     dbPath = applySponsorshipTestEnv({ SPONSORSHIP_ENABLED: "false" });
     const app = await createTestApp();

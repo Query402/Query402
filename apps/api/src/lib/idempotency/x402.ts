@@ -11,11 +11,18 @@ import {
 import {
   abortIdempotency,
   beginIdempotency,
+  buildRequestHash,
   completeIdempotency,
   respondIdempotencyGate
 } from "./route.js";
 import { getResponseByPaymentProof, savePaymentProofResponse } from "./service.js";
 import { getProviderById } from "../pricing.js";
+import {
+  PaymentProofError,
+  assertProofCoversQuery,
+  proofFromHeader,
+  queryCoverageDigest
+} from "../query-proof.js";
 
 async function persistDemoEvidenceIfNeeded(input: { req: Request; record: PaidRequestRecord }) {
   const evidence = getPaymentEvidence(input.req);
@@ -26,13 +33,24 @@ async function persistDemoEvidenceIfNeeded(input: { req: Request; record: PaidRe
 
 function buildPaidResponse(req: Request, result: QueryResult) {
   const evidence = getPaymentEvidence(req);
+  const network = evidence?.network ?? config.STELLAR_NETWORK;
+  const facilitatorUrl = evidence?.facilitatorUrl ?? config.X402_FACILITATOR_URL;
+  const payTo = evidence?.payTo ?? config.X402_PAY_TO_ADDRESS;
+  const evidencePayload = evidence
+    ? paymentEvidenceSummary(evidence)
+    : {
+        kind: "verified" as const,
+        status: "settlement-pending" as const,
+        network,
+        payTo,
+        facilitatorUrl
+      };
   return {
+    traceId: result.traceId,
     payment: {
-      network: evidence?.network ?? config.STELLAR_NETWORK,
-      facilitatorUrl: evidence?.facilitatorUrl ?? config.X402_FACILITATOR_URL,
-      evidence: evidence
-        ? paymentEvidenceSummary(evidence)
-        : { kind: "verified", status: "settlement-pending" }
+      network,
+      facilitatorUrl,
+      evidence: evidencePayload
     },
     result
   };
@@ -79,6 +97,7 @@ export async function handlePaidX402Route(
     }
 
     const evidence = getPaymentEvidence(req);
+    const proofKey = paymentProofKey(req);
     const fingerprint = {
       method: "GET" as const,
       route: input.route,
@@ -88,7 +107,8 @@ export async function handlePaidX402Route(
       url: input.url,
       payer: evidence?.payer ?? req.header("x-demo-payer") ?? "unknown",
       network: config.STELLAR_NETWORK,
-      quotedAmountUsd: catalogProvider.priceUsd
+      quotedAmountUsd: catalogProvider.priceUsd,
+      paymentReference: proofKey
     };
 
     const gate = beginIdempotency(req, fingerprint);
@@ -96,12 +116,51 @@ export async function handlePaidX402Route(
       return;
     }
 
-    const proofKey = paymentProofKey(req);
+    const requestHash = buildRequestHash(fingerprint);
+
+    // Payment-proof replay must bind the same request body hash. A reused proof
+    // with a different query is rejected rather than answered from cache.
     if (proofKey) {
-      const existing = getResponseByPaymentProof(proofKey);
-      if (existing) {
-        return res.status(200).json(existing);
+      const existing = getResponseByPaymentProof(proofKey, requestHash);
+      if (existing.hit) {
+        return res.status(200).json(existing.body);
       }
+      if (existing.conflict) {
+        return res.status(409).json({ error: "payment_proof_conflict" });
+      }
+    }
+
+    const price = catalogProvider.priceUsd.toString();
+    const asset = evidence?.asset ?? "USDC";
+    const amount = evidence?.amount ?? price;
+    let proof = {
+      digest: queryCoverageDigest({
+        provider: input.provider,
+        target: input.queryOrUrl,
+        price
+      }),
+      asset,
+      amount
+    };
+    try {
+      const headerProof = proofFromHeader(req);
+      if (headerProof) {
+        proof = headerProof;
+      }
+      assertProofCoversQuery({
+        provider: input.provider,
+        target: input.queryOrUrl,
+        price,
+        asset,
+        amount,
+        proof
+      });
+    } catch (error) {
+      if (error instanceof PaymentProofError) {
+        abortIdempotency(req);
+        return res.status(402).json({ error: "payment_proof_mismatch" });
+      }
+      throw error;
     }
 
     const result = await input.execute();
@@ -121,7 +180,7 @@ export async function handlePaidX402Route(
     const body = buildPaidResponse(req, result);
 
     if (proofKey) {
-      savePaymentProofResponse(proofKey, body);
+      savePaymentProofResponse(proofKey, body, requestHash);
     }
 
     completeIdempotency(req, fingerprint, 200, body);

@@ -1,0 +1,31 @@
+{
+  "lockfileVersion": 3,
+  "packages": {
+    "node_modules/git-package": {
+      "resolved": "git+ssh://user:credential@example.com/group/package.git?signature=signed-secret"
+    },
+    "node_modules/git-protocol-package": {
+      "resolved": "git://example.com/group/package.git"
+    },
+    "node_modules/file-package": {
+      "resolved": "file:../../package.tgz"
+    },
+    "node_modules/link-package": {
+      "resolved": "link:../local-package"
+    },
+    "node_modules/untracked-link": {
+      "resolved": "vendor/untracked",
+      "link": true
+    },
+    "vendor/untracked": {
+      "name": "untracked-link",
+      "version": "1.0.0"
+    },
+    "node_modules/http-package": {
+      "resolved": "http://registry.npmjs.org/package.tgz?token=plain-http-secret"
+    },
+    "node_modules/external-package": {
+      "resolved": "https://packages.example.com/package.tgz?X-Amz-Signature=signed-query-secret"
+    }
+  }
+}

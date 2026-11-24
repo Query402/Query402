@@ -1,0 +1,21 @@
+{
+  "lockfileVersion": 3,
+  "packages": {
+    "": {
+      "name": "fixture-root",
+      "workspaces": ["apps/*"]
+    },
+    "apps/sample": {
+      "name": "fixture-workspace",
+      "version": "1.0.0"
+    },
+    "node_modules/fixture-workspace": {
+      "resolved": "apps/sample",
+      "link": true
+    },
+    "node_modules/allowed-package": {
+      "resolved": "https://registry.npmjs.org/allowed-package/-/allowed-package-1.0.0.tgz",
+      "integrity": "sha512-example"
+    }
+  }
+}

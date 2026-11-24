@@ -1,0 +1,53 @@
+# Repository automation and dependency manifests
+/.github/CODEOWNERS @emrekayat
+/.github/workflows/ @emrekayat
+/.github/dependabot.yml @emrekayat
+/package.json @emrekayat
+/package-lock.json @emrekayat
+/apps/*/package.json @emrekayat
+/packages/*/package.json @emrekayat
+/**/package-lock.json @emrekayat
+
+# Environment and executable configuration
+/.env.example @emrekayat
+/eslint.config.mjs @emrekayat
+/tsconfig*.json @emrekayat
+/**/tsconfig*.json @emrekayat
+/apps/*/vitest.config.ts @emrekayat
+/packages/*/vitest.config.ts @emrekayat
+/apps/web/vite.config.ts @emrekayat
+/apps/web/tailwind.config.ts @emrekayat
+/apps/web/postcss.config.cjs @emrekayat
+/apps/api/src/lib/config.ts @emrekayat
+/apps/agent-client/src/config.ts @emrekayat
+/scripts/ @emrekayat
+
+# Payment, x402, sponsorship, and idempotency
+/apps/api/src/app.ts @emrekayat
+/apps/api/src/routes/protected.ts @emrekayat
+/apps/api/src/routes/sponsorship.ts @emrekayat
+/apps/api/src/lib/x402.ts @emrekayat
+/apps/api/src/lib/payment* @emrekayat
+/apps/api/src/lib/facilitator* @emrekayat
+/apps/api/src/lib/stellar.ts @emrekayat
+/apps/api/src/lib/sponsorship/ @emrekayat
+/apps/api/src/lib/idempotency/ @emrekayat
+/apps/web/src/lib/x402.ts @emrekayat
+/apps/web/src/lib/sponsorship.ts @emrekayat
+/apps/web/src/lib/idempotency.ts @emrekayat
+/apps/web/src/pages/ControlDeckPage.tsx @emrekayat
+/apps/web/src/components/PaymentEvidenceBanner.tsx @emrekayat
+/apps/agent-client/src/ @emrekayat
+/packages/shared/src/payment-links.ts @emrekayat
+/packages/shared/src/idempotency.ts @emrekayat
+
+# URL safety and scraping
+/apps/api/src/lib/urlSafety.ts @emrekayat
+/apps/api/src/lib/scrape-url-safety.ts @emrekayat
+/apps/api/src/providers/scrape.ts @emrekayat
+
+# Persistence, storage, migrations, and wallets
+/apps/api/src/lib/persistence.ts @emrekayat
+/apps/api/src/lib/storage/ @emrekayat
+/apps/api/src/scripts/migrate-db-json.ts @emrekayat
+/apps/web/src/lib/wallet/ @emrekayat

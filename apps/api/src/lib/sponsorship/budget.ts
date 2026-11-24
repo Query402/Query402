@@ -14,6 +14,20 @@ export class SponsorshipBudgetExceededError extends Error {
   }
 }
 
+export class SponsorshipPreviewMismatchError extends Error {
+  readonly name = "SponsorshipPreviewMismatchError";
+
+  constructor(
+    public readonly expectedAmountUsd: number,
+    public readonly actualAmountUsd: number
+  ) {
+    super(
+
+      `preview amount ${expectedAmountUsd} does not match budget amount ${actualAmountUsd}`
+    );
+  }
+}
+
 export function getDailyWindowStart(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -22,7 +36,7 @@ function exceedsBudgetLimit(spentUsd: number, amountUsd: number, limitUsd: numbe
   return Number((spentUsd + amountUsd).toFixed(6)) > Number(limitUsd.toFixed(6));
 }
 
-function readSpentUsd(
+export function readSpentUsd(
   database: Database.Database,
   scope: "global" | "wallet",
   wallet: string | null,
@@ -157,5 +171,70 @@ export function releaseBudget(wallet: string, amountUsd: number): void {
     const windowStart = getDailyWindowStart();
     decrementBudget(database, "wallet", wallet, windowStart, amountUsd);
     decrementBudget(database, "global", null, windowStart, amountUsd);
+  });
+}
+
+export interface BudgetSnapshot {
+  windowStart: string;
+  walletSpentUsd: number;
+  globalSpentUsd: number;
+  walletRemainingUsd: number;
+  globalRemainingUsd: number;
+  walletLimitUsd: number;
+  globalLimitUsd: number;
+}
+
+function roundUsd(value: number): number {
+  return Number(value.toFixed(6));
+}
+
+export function readBudgetSnapshot(wallet: string, windowStart = getDailyWindowStart()): BudgetSnapshot {
+  const database = getSponsorshipDb();
+  const walletSpentUsd = readSpentUsd(database, "wallet", wallet, windowStart);
+  const globalSpentUsd = readSpentUsd(database, "global", null, windowStart);
+  const walletLimitUsd = config.SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD;
+  const globalLimitUsd = config.SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD;
+
+  return {
+    windowStart,
+    walletSpentUsd,
+    globalSpentUsd,
+    walletRemainingUsd: roundUsd(Math.max(walletLimitUsd - walletSpentUsd, 0)),
+    globalRemainingUsd: roundUsd(Math.max(globalLimitUsd - globalSpentUsd, 0)),
+    walletLimitUsd,
+    globalLimitUsd
+  };
+}
+
+export function getRemainingBudget(wallet: string): number | null {
+  return readBudgetSnapshot(wallet).walletRemainingUsd;
+}
+
+export interface GrantWithDebitInput {
+  wallet: string;
+  amountUsd: number;
+  nonce: string;
+  grantId: string;
+  /** Amount the policy preview authorized. Must match `amountUsd`. */
+  previewAmountUsd: number;
+}
+
+/**
+ * Atomically applies the grant debit only when the policy preview and the
+ * budget store agree on the exact spend. The nonce insert, budget debit, and
+ * amount validation all run inside a single transaction, so a failed grant
+ * leaves the remaining budget unchanged and two overlapping grants cannot
+ * spend the last unit twice.
+ */
+export function grantWithDebit(input: GrantWithDebitInput): void {
+  if (Number(input.previewAmountUsd.toFixed(6)) !== Number(input.amountUsd.toFixed(6))) {
+    throw new SponsorshipPreviewMismatchError(input.previewAmountUsd, input.amountUsd);
+  }
+
+  checkAndReserveBudget({
+    wallet: input.wallet,
+    amountUsd: input.amountUsd,
+    nonce: input.nonce,
+    grantId: input.grantId
   });
 }

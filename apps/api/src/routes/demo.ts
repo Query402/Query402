@@ -88,6 +88,12 @@ function policyErrorResponse(res: Response, policy: ReturnType<typeof authorizeS
 
 export const paidRouter = Router();
 
+// Prevent browsers and proxies from caching sensitive payment evidence.
+paidRouter.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 paidRouter.post("/api/paid/run", async (req, res, next) => {
   try {
     const parsed = paidRunSchema.safeParse(req.body);
@@ -182,12 +188,14 @@ paidRouter.post("/api/paid/run", async (req, res, next) => {
     if (!output.ok) {
       releaseBudget(grant.wallet, quotedPriceUsd);
       abortIdempotency(req);
+      const payload = output.payload as { result?: QueryResult } | undefined;
       return res.status(502).json({
         error: "Payment execution failed",
         status: output.status,
         payload: output.payload,
         grantId: grant.grantId,
-        decision: policy.decision
+        decision: policy.decision,
+        traceId: payload?.result?.traceId ?? null
       });
     }
 
@@ -206,6 +214,15 @@ paidRouter.post("/api/paid/run", async (req, res, next) => {
       priceUsd: quotedPriceUsd,
       latencyMs: result?.latencyMs ?? 0,
       traceId: result?.traceId ?? `trace_sponsored_${grant.grantId}`,
+      execution: result?.execution ?? {
+        providerId: parsed.data.provider,
+        source: "unavailable",
+        usedFallback: true,
+        fallbackReason: "missing-fallback",
+        latencyEstimateMs: 0,
+        observedDurationMs: 0,
+        circuitBreakerState: "closed"
+      },
       paymentResponseHeader: output.paymentResponseHeader,
       walletPublicKey: grant.wallet,
       sponsorshipGrantId: grant.grantId,

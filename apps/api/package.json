@@ -2,6 +2,11 @@
   "name": "@query402/api",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Query402/Query402"
+  },
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "prebuild": "npm --prefix ../../packages/shared run build",
@@ -10,8 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test": "vitest run --test-timeout=30000",
+    "test:coverage": "vitest run --coverage --test-timeout=30000",
     "test:watch": "vitest",
     "migrate:analytics": "tsx src/scripts/migrate-db-json.ts",
     "lint": "eslint src",
@@ -21,14 +26,14 @@
   "dependencies": {
     "@query402/shared": "0.1.0",
     "@stellar/stellar-sdk": "^15.0.1",
-    "@x402/core": "^2.17.0",
-    "@x402/express": "^2.17.0",
-    "@x402/fetch": "^2.17.0",
-    "@x402/stellar": "^2.17.0",
+    "@x402/core": "^2.28.0",
+    "@x402/express": "^2.28.0",
+    "@x402/fetch": "^2.28.0",
+    "@x402/stellar": "^2.28.0",
     "better-sqlite3": "^11.9.1",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^5.1.0",
+    "express": "^5.3.0",
     "nanoid": "^5.1.5",
     "pino": "^9.7.0",
     "pino-http": "^10.5.0",
@@ -39,11 +44,11 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.17",
-    "@types/supertest": "^6.0.3",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^3.2.4",
-    "supertest": "^7.1.1",
-    "tsx": "^4.19.3",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
   }
 }
