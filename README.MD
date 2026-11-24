@@ -146,6 +146,7 @@ Details: [`docs/testing.md`](./docs/testing.md)
 - **Testing strategy**: [`docs/testing.md`](./docs/testing.md)
 - **Demo vs real payment evidence**: [`docs/demo-payment-evidence.md`](./docs/demo-payment-evidence.md)
 - **Architecture overview**: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- **Security policy**: [`.github/SECURITY.md`](./.github/SECURITY.md)
 
 ## Quality gates
 
