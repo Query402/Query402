@@ -53,6 +53,7 @@ Full technical breakdown: [`ARCHITECTURE.md`](./architecture.md)
   - Pricing in `src/lib/pricing.ts`
   - AI provider integration in `src/lib/groq.ts`
   - Persistence in `src/lib/persistence.ts`
+  - Inbound request ID validation in `src/lib/request-id.ts` (see [`docs/request-ids.md`](./docs/request-ids.md))
 - `apps/agent-client`
   - CLI commands for paid requests (`search`, `news`, `scrape`)
   - Demo script (`npm run demo --workspace @query402/agent-client`)

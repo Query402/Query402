@@ -9,6 +9,7 @@ import { logger } from "./lib/logger.js";
 import { config } from "./lib/config.js";
 import { UnsafeScrapeUrlError } from "./lib/scrape-url-safety.js";
 import { PaymentEvidenceError } from "./lib/payment-evidence.js";
+import { createRequestIdMiddleware, REQUEST_ID_HEADER } from "./lib/request-id.js";
 
 export const app = express();
 
@@ -45,12 +46,26 @@ app.use(
 
       callback(new Error(`CORS blocked for origin: ${origin}`));
     },
-    exposedHeaders: ["payment-required", "payment-response", "x-payment-response"]
+    exposedHeaders: [
+      "payment-required",
+      "payment-response",
+      "x-payment-response",
+      REQUEST_ID_HEADER
+    ]
   })
 );
+app.use(createRequestIdMiddleware());
 app.use(express.json());
-app.use((req, _res, next) => {
-  logger.info({ method: req.method, url: req.url }, "incoming request");
+app.use((req, res, next) => {
+  logger.info(
+    {
+      requestId: res.locals.requestId,
+      requestIdSource: res.locals.requestIdSource,
+      method: req.method,
+      url: req.url
+    },
+    "incoming request"
+  );
   next();
 });
 
