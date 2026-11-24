@@ -2,6 +2,42 @@ import { z } from "zod";
 import type { ProviderResultItem, QueryMode } from "@query402/shared";
 import { config } from "./config.js";
 
+export const GROQ_REQUEST_TIMEOUT_MS = 8_000;
+export const GROQ_MAX_RESPONSE_BYTES = 256 * 1024;
+
+type GroqRequestOptions = {
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+};
+
+async function readBoundedText(response: Response, maxBytes: number): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error("Groq response exceeded size limit");
+  }
+
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let byteLength = 0;
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > maxBytes) {
+      await reader.cancel();
+      throw new Error("Groq response exceeded size limit");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+
+  return text + decoder.decode();
+}
+
 const groqItemsSchema = z.array(
   z.object({
     title: z.string().min(1),
@@ -56,42 +92,69 @@ function buildPrompt(mode: QueryMode, query: string): string {
 
 export async function fetchGroqItems(
   mode: QueryMode,
-  query: string
+  query: string,
+  options: GroqRequestOptions = {}
 ): Promise<ProviderResultItem[] | null> {
   if (!config.GROQ_API_KEY) {
     return null;
   }
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.GROQ_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: config.groqModel,
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a retrieval assistant. Always return strict JSON only. Keep claims cautious and avoid fabricated certainty."
-        },
-        {
-          role: "user",
-          content: buildPrompt(mode, query)
-        }
-      ]
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? GROQ_REQUEST_TIMEOUT_MS
+  );
+  let response: Response;
 
-  if (!response.ok) {
-    const payload = await response.text();
-    throw new Error(`Groq request failed (${response.status}): ${payload}`);
+  try {
+    response = await (options.fetch ?? fetch)("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: config.groqModel,
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a retrieval assistant. Always return strict JSON only. Keep claims cautious and avoid fabricated certainty."
+          },
+          {
+            role: "user",
+            content: buildPrompt(mode, query)
+          }
+        ]
+      })
+    });
+  } catch {
+    if (controller.signal.aborted) {
+      throw new Error("Groq request timed out");
+    }
+    throw new Error("Groq request failed");
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
+  const payload = await readBoundedText(
+    response,
+    options.maxResponseBytes ?? GROQ_MAX_RESPONSE_BYTES
+  );
+
+  if (!response.ok) {
+    throw new Error(`Groq request failed (status ${response.status})`);
+  }
+
+  let data: { choices?: Array<{ message?: { content?: unknown } }> };
+  try {
+    data = JSON.parse(payload) as typeof data;
+  } catch {
+    throw new Error("Groq response was not valid JSON");
+  }
+  const content = data.choices?.[0]?.message?.content;
 
   if (typeof content !== "string" || content.length === 0) {
     throw new Error("Groq response did not include text content");
