@@ -17,6 +17,7 @@ import {
 } from "./services/query-service.js";
 import { ProviderCatalogConflictError } from "./lib/pricing.js";
 import { createChallengeRateLimit, isUnpaidX402Request } from "./lib/challenge-rate-limit.js";
+import { createRouteFallback } from "./lib/route-fallback.js";
 
 const UNKNOWN_INTERNAL_ERROR_MESSAGE = "Internal server error";
 
@@ -151,6 +152,9 @@ app.use(logApiRequest);
 
 app.use(publicRouter);
 app.use(sponsorshipRouter);
+// Unknown /api and /x402 paths and unsupported methods get stable JSON here, before the
+// payment challenge or a rate limit can act on them. Known routes pass straight through.
+app.use(createRouteFallback([publicRouter, sponsorshipRouter, protectedRouter, paidRouter]));
 app.use(
   createChallengeRateLimit({
     limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
