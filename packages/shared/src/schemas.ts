@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+export const credentialFreeHttpUrlSchema = z
+  .string()
+  .url()
+  .superRefine((value, ctx) => {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Service URL must use HTTP or HTTPS"
+      });
+    }
+    if (parsed.username || parsed.password) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Service URL must not contain embedded credentials"
+      });
+    }
+  });
+
 export const queryModeSchema = z.enum(["search", "news", "scrape"]);
 
 export const providerCategorySchema = queryModeSchema;
