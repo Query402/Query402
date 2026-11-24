@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  MIN_PRODUCTION_API_KEY_BYTES,
+  MIN_PRODUCTION_SIGNING_SECRET_BYTES,
   parseAndValidateCorsOrigins,
-  validateCorsOrigin
+  validateCorsOrigin,
+  validateProductionSecret,
+  validateProductionSecrets
 } from "./config.js";
 
 describe("CORS origin validation (table-driven)", () => {
@@ -88,6 +92,145 @@ describe("CORS origin validation (table-driven)", () => {
       expect(() => parseAndValidateCorsOrigins(raw)).toThrow(
         "wildcard or null origins are not allowed"
       );
+    });
+  });
+});
+
+describe("Production secret strength validation", () => {
+  const STRONG_SIGNING_SECRET = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+  const STRONG_API_KEY = "fac_key_prod_9f86d081884c7d659a2f";
+
+  describe("production environment enforcement", () => {
+    it("rejects secrets shorter than minimum byte length", () => {
+      expect(() =>
+        validateProductionSecret(
+          "SPONSORSHIP_SIGNING_SECRET",
+          "too-short",
+          MIN_PRODUCTION_SIGNING_SECRET_BYTES
+        )
+      ).toThrow("must be at least 32 bytes");
+
+      expect(() =>
+        validateProductionSecret(
+          "X402_FACILITATOR_API_KEY",
+          "short",
+          MIN_PRODUCTION_API_KEY_BYTES
+        )
+      ).toThrow("must be at least 16 bytes");
+    });
+
+    it.each([
+      "placeholder-signing-secret-value-longer-than-32-chars",
+      "change_me_to_a_real_production_secret_key_please",
+      "replace-me-with-production-signing-secret-now",
+      "your_secret_here_replace_before_deploying_to_prod",
+      "example-secret-key-that-is-long-enough-for-length-check",
+      "test-secret-key-for-testing-purposes-only-12345678",
+      "dev-signing-key-for-local-development-only-12345678",
+      "1234567890123456789012345678901234567890",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "default_signing_secret_for_the_service_instance"
+    ])("rejects known placeholder-shaped secret: %s", (placeholder) => {
+      expect(() =>
+        validateProductionSecret(
+          "SPONSORSHIP_SIGNING_SECRET",
+          placeholder,
+          MIN_PRODUCTION_SIGNING_SECRET_BYTES
+        )
+      ).toThrow("placeholder value rejected");
+    });
+
+    it("accepts strong production secrets", () => {
+      expect(() =>
+        validateProductionSecret(
+          "SPONSORSHIP_SIGNING_SECRET",
+          STRONG_SIGNING_SECRET,
+          MIN_PRODUCTION_SIGNING_SECRET_BYTES
+        )
+      ).not.toThrow();
+
+      expect(() =>
+        validateProductionSecret(
+          "X402_FACILITATOR_API_KEY",
+          STRONG_API_KEY,
+          MIN_PRODUCTION_API_KEY_BYTES
+        )
+      ).not.toThrow();
+    });
+
+    it("errors name only the variable, never its value", () => {
+      const dangerousSecret = "change_me_super_secret_payload_value";
+      try {
+        validateProductionSecret(
+          "SPONSORSHIP_SIGNING_SECRET",
+          dangerousSecret,
+          MIN_PRODUCTION_SIGNING_SECRET_BYTES
+        );
+        expect.unreachable("should have thrown");
+      } catch (err) {
+        const msg = (err as Error).message;
+        expect(msg).toContain("SPONSORSHIP_SIGNING_SECRET");
+        expect(msg).not.toContain(dangerousSecret);
+        expect(msg).not.toContain("super_secret_payload_value");
+      }
+    });
+
+    it("validateProductionSecrets enforces all configured secrets in production", () => {
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "production",
+          SPONSORSHIP_SIGNING_SECRET: "short",
+          X402_FACILITATOR_API_KEY: STRONG_API_KEY
+        })
+      ).toThrow("SPONSORSHIP_SIGNING_SECRET");
+
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "production",
+          SPONSORSHIP_SIGNING_SECRET: STRONG_SIGNING_SECRET,
+          X402_FACILITATOR_API_KEY: "change_me_api_key_long_enough"
+        })
+      ).toThrow("X402_FACILITATOR_API_KEY");
+
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "production",
+          SPONSORSHIP_SIGNING_SECRET: STRONG_SIGNING_SECRET,
+          X402_FACILITATOR_API_KEY: STRONG_API_KEY
+        })
+      ).not.toThrow();
+    });
+  });
+
+  describe("development and test fixtures remain supported", () => {
+    it("permits short or placeholder secrets when NODE_ENV is development", () => {
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "development",
+          SPONSORSHIP_SIGNING_SECRET: "test-secret",
+          X402_FACILITATOR_API_KEY: "dev-key"
+        })
+      ).not.toThrow();
+    });
+
+    it("permits short or placeholder secrets when NODE_ENV is test", () => {
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "test",
+          SPONSORSHIP_SIGNING_SECRET: "test-signing-secret",
+          X402_FACILITATOR_API_KEY: "test"
+        })
+      ).not.toThrow();
+    });
+
+    it("permits unset or empty secrets even in production", () => {
+      expect(() =>
+        validateProductionSecrets({
+          NODE_ENV: "production",
+          SPONSORSHIP_SIGNING_SECRET: undefined,
+          X402_FACILITATOR_API_KEY: undefined
+        })
+      ).not.toThrow();
     });
   });
 });
