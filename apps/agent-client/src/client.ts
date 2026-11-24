@@ -20,6 +20,21 @@ import {
 export { QuoteBindError, buildRequestedQuote, assertChallengeMatchesQuote };
 export type { RequestedQuote };
 
+/** Default bound for catalog, challenge, and paid-retry fetches (ms). */
+export const AGENT_REQUEST_TIMEOUT_MS = 15_000;
+
+export type FetchTimeoutPhase = "catalog" | "challenge" | "paid-retry" | "request";
+
+export class RequestTimeoutError extends Error {
+  readonly name = "RequestTimeoutError";
+  constructor(
+    public readonly phase: FetchTimeoutPhase,
+    public readonly timeoutMs: number
+  ) {
+    super(`Request timed out after ${timeoutMs}ms during ${phase}`);
+  }
+}
+
 export class ChallengeMismatchError extends Error {
   readonly name = "ChallengeMismatchError";
   constructor(public readonly mismatch: ChallengeMismatch) {
@@ -30,13 +45,58 @@ export class ChallengeMismatchError extends Error {
 }
 
 /**
+ * Bounded fetch wrapper: aborts after `timeoutMs`, always clears the timer,
+ * and throws a stable non-secret RequestTimeoutError on timeout.
+ */
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  options: {
+    fetch?: typeof fetch;
+    timeoutMs?: number;
+    phase?: FetchTimeoutPhase;
+  } = {}
+): Promise<Response> {
+  const fetchFn = options.fetch ?? fetch;
+  const timeoutMs = options.timeoutMs ?? AGENT_REQUEST_TIMEOUT_MS;
+  const phase = options.phase ?? "request";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetchFn(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new RequestTimeoutError(phase, timeoutMs);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Fetch the 402 challenge and compare it to the CLI's own configuration
  * BEFORE any signing happens. Throws ChallengeMismatchError when the
  * server's provider/network/asset/amount disagrees with the config; the
  * signer is never constructed on that path.
  */
-export async function fetchValidatedChallenge(endpoint: string): Promise<PaymentRequired> {
-  const probe = await fetch(endpoint, { method: "GET" });
+export async function fetchValidatedChallenge(
+  endpoint: string,
+  options: { fetch?: typeof fetch; timeoutMs?: number } = {}
+): Promise<PaymentRequired> {
+  const probe = await fetchWithTimeout(
+    endpoint,
+    { method: "GET" },
+    {
+      fetch: options.fetch,
+      timeoutMs: options.timeoutMs,
+      phase: "challenge"
+    }
+  );
   if (probe.status !== 402) {
     throw new Error(`Expected a 402 challenge from ${endpoint} but got status ${probe.status}.`);
   }
@@ -130,14 +190,21 @@ export type RunPaidQueryDeps = {
     quote: RequestedQuote
   ) => Promise<Record<string, string>>;
   nowMs?: number;
+  /** Override the default request timeout (ms) for catalog/challenge/paid-retry. */
+  timeoutMs?: number;
 };
 
 async function resolveQuoteFromCatalog(
   provider: string,
   fetchFn: typeof fetch,
-  apiBaseUrl: string
+  apiBaseUrl: string,
+  timeoutMs?: number
 ): Promise<RequestedQuote> {
-  const response = await fetchFn(`${apiBaseUrl}/api/providers`);
+  const response = await fetchWithTimeout(
+    `${apiBaseUrl}/api/providers`,
+    undefined,
+    { fetch: fetchFn, timeoutMs, phase: "catalog" }
+  );
   if (!response.ok) {
     throw new Error(`Unable to load provider catalog (status ${response.status})`);
   }
@@ -172,12 +239,18 @@ export async function fetchWithQuoteBoundPayment(
     client: x402Client;
     createPaymentHeaders?: RunPaidQueryDeps["createPaymentHeaders"];
     nowMs?: number;
+    timeoutMs?: number;
   }
 ): Promise<Response> {
   const fetchFn = options.fetch ?? fetch;
   const httpClient = new x402HTTPClient(options.client);
+  const timeoutMs = options.timeoutMs;
 
-  const firstResponse = await fetchFn(endpoint, init);
+  const firstResponse = await fetchWithTimeout(endpoint, init, {
+    fetch: fetchFn,
+    timeoutMs,
+    phase: "challenge"
+  });
   if (firstResponse.status !== 402) {
     return firstResponse;
   }
@@ -220,10 +293,18 @@ export async function fetchWithQuoteBoundPayment(
     headers.set(key, value);
   }
 
-  return fetchFn(endpoint, {
-    ...init,
-    headers
-  });
+  return fetchWithTimeout(
+    endpoint,
+    {
+      ...init,
+      headers
+    },
+    {
+      fetch: fetchFn,
+      timeoutMs,
+      phase: "paid-retry"
+    }
+  );
 }
 
 export async function runPaidQuery(
@@ -236,6 +317,7 @@ export async function runPaidQuery(
   deps: RunPaidQueryDeps = {}
 ) {
   const fetchFn = deps.fetch ?? fetch;
+  const timeoutMs = deps.timeoutMs;
   const endpoint = buildPaidQueryEndpoint(input);
   const apiBaseUrl = config.API_BASE_URL;
   const isDemoMode = config.DEMO_MODE === "true";
@@ -247,8 +329,11 @@ export async function runPaidQuery(
   let quote: RequestedQuote | undefined = deps.quote;
   if (!isDemoMode && !quote) {
     try {
-      quote = await resolveQuoteFromCatalog(input.provider, fetchFn, apiBaseUrl);
+      quote = await resolveQuoteFromCatalog(input.provider, fetchFn, apiBaseUrl, timeoutMs);
     } catch (error) {
+      if (error instanceof RequestTimeoutError) {
+        throw error;
+      }
       if (isNetworkFailure(error)) {
         throw new Error(formatNetworkFailure(error, apiBaseUrl), { cause: error });
       }
@@ -273,14 +358,18 @@ export async function runPaidQuery(
   let response: Response;
   try {
     response = isDemoMode
-      ? await fetchFn(endpoint, {
-          method: "GET",
-          headers: {
-            "x-query402-demo-paid": "true",
-            "payment-response": `demo_tx_${nanoid(10)}`,
-            "Idempotency-Key": idempotencyKey
-          }
-        })
+      ? await fetchWithTimeout(
+          endpoint,
+          {
+            method: "GET",
+            headers: {
+              "x-query402-demo-paid": "true",
+              "payment-response": `demo_tx_${nanoid(10)}`,
+              "Idempotency-Key": idempotencyKey
+            }
+          },
+          { fetch: fetchFn, timeoutMs, phase: "request" }
+        )
       : await (async () => {
           if (!quote) {
             throw new QuoteBindError(
@@ -299,7 +388,7 @@ export async function runPaidQuery(
           // BEFORE asking for a signature. This fetches and validates the
           // challenge; on mismatch it throws and the signer below is never
           // constructed.
-          await fetchValidatedChallenge(endpoint);
+          await fetchValidatedChallenge(endpoint, { fetch: fetchFn, timeoutMs });
 
           const wallet = deps.createWallet
             ? deps.createWallet(secretKey ?? "test-secret", network)
@@ -323,12 +412,13 @@ export async function runPaidQuery(
               fetch: fetchFn,
               client,
               createPaymentHeaders: deps.createPaymentHeaders,
-              nowMs: deps.nowMs
+              nowMs: deps.nowMs,
+              timeoutMs
             }
           );
         })();
   } catch (error) {
-    if (error instanceof QuoteBindError) {
+    if (error instanceof QuoteBindError || error instanceof RequestTimeoutError) {
       throw error;
     }
     if (isNetworkFailure(error)) {
