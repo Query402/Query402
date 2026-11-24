@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  credentialFreeHttpUrlSchema,
   latencyBandSchema,
   MICRO_USD_PER_USD,
   newsQuerySchema,
@@ -27,6 +28,24 @@ import {
   sponsorshipChallengeSchema,
   sponsorshipGrantSchema
 } from "./schemas.js";
+
+describe("credentialFreeHttpUrlSchema", () => {
+  it.each(["http://localhost:3001", "https://example.com/path"])(
+    "accepts credential-free HTTP(S) URL %s",
+    (value) => {
+      expect(credentialFreeHttpUrlSchema.safeParse(value).success).toBe(true);
+    }
+  );
+
+  it.each(["https://user@example.com", "https://user:password@example.com", "ftp://example.com"])(
+    "rejects unsafe service URL %s",
+    (value) => {
+      const result = credentialFreeHttpUrlSchema.safeParse(value);
+      expect(result.success).toBe(false);
+      if (!result.success) expect(JSON.stringify(result.error.issues)).not.toContain("password@");
+    }
+  );
+});
 
 const _validSlaBadge = {
   latencyBand: "fast" as const,

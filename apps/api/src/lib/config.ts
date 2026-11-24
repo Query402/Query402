@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { credentialFreeHttpUrlSchema } from "@query402/shared";
 import { resolveApiDataPath } from "./storage/paths.js";
 
 function normalizeOrigin(origin: string) {
@@ -37,11 +38,13 @@ const envSchema = z.object({
     .positive()
     .default(64 * 1024),
   STELLAR_NETWORK: z.string().default("stellar:testnet"),
-  STELLAR_RPC_URL: z.string().url().default("https://soroban-testnet.stellar.org"),
-  X402_FACILITATOR_URL: z.string().url().default("https://channels.openzeppelin.com/x402/testnet"),
+  STELLAR_RPC_URL: credentialFreeHttpUrlSchema.default("https://soroban-testnet.stellar.org"),
+  X402_FACILITATOR_URL: credentialFreeHttpUrlSchema.default(
+    "https://channels.openzeppelin.com/x402/testnet"
+  ),
   X402_FACILITATOR_API_KEY: z.string().optional(),
   X402_PAY_TO_ADDRESS: z.string().min(10, "X402_PAY_TO_ADDRESS is required").optional(),
-  API_BASE_URL: z.string().url().default("http://localhost:3001"),
+  API_BASE_URL: credentialFreeHttpUrlSchema.default("http://localhost:3001"),
   CORS_ORIGINS: z.string().optional(),
   DEMO_CLIENT_SECRET_KEY: z.string().optional(),
   DEMO_CLIENT_PUBLIC_KEY: z.string().optional(),
