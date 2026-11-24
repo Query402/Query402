@@ -5,10 +5,10 @@
 Security fixes are applied to the `main` branch. The current package line is `0.1.x`.
 Older commits and forks are not supported.
 
-| Version | Supported |
-| ------- | --------- |
-| `main` (`0.1.x`) | Yes |
-| older snapshots | No |
+| Version          | Supported |
+| ---------------- | --------- |
+| `main` (`0.1.x`) | Yes       |
+| older snapshots  | No        |
 
 ## Reporting a vulnerability
 
