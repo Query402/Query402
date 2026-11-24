@@ -5,8 +5,151 @@ import { z } from "zod";
 import { credentialFreeHttpUrlSchema } from "@query402/shared";
 import { resolveApiDataPath } from "./storage/paths.js";
 
-function normalizeOrigin(origin: string) {
-  return origin.trim().replace(/\/+$/, "").toLowerCase();
+/** Minimum byte length for configured production signing secrets (e.g. SPONSORSHIP_SIGNING_SECRET: 32 bytes / 256 bits). */
+export const MIN_PRODUCTION_SIGNING_SECRET_BYTES = 32;
+
+/** Minimum byte length for configured production API secrets (e.g. X402_FACILITATOR_API_KEY: 16 bytes). */
+export const MIN_PRODUCTION_API_KEY_BYTES = 16;
+
+const PLACEHOLDER_PATTERNS = [
+  /placeholder/i,
+  /change[-_]?me/i,
+  /replace[-_]?me/i,
+  /your[-_]?(secret|api[-_]?key|key|token)/i,
+  /^example/i,
+  /^sample/i,
+  /^test[-_]?/i,
+  /^dev[-_]?/i,
+  /^todo/i,
+  /^default/i,
+  /^secret$/i,
+  /^api[-_]?key$/i,
+  /^(.)\1+$/, // all repeated character e.g. "aaaaa..."
+  /^123456/i,
+  /^abcdef/i
+];
+
+/**
+ * Validates a single CORS origin string at startup.
+ *
+ * Rules:
+ * - Accept only canonical HTTP(S) origins with scheme, host, and optional port.
+ * - Reject credentials, paths, queries, fragments, null, and wildcards.
+ * - Startup errors never echo embedded credentials.
+ */
+export function validateCorsOrigin(rawOrigin: string): string {
+  const trimmed = rawOrigin.trim();
+  if (!trimmed) {
+    throw new Error("Invalid CORS origin: empty origin is not allowed");
+  }
+
+  if (trimmed.toLowerCase() === "null" || trimmed === "*" || trimmed.includes("*")) {
+    throw new Error("Invalid CORS origin: wildcard or null origins are not allowed");
+  }
+
+  // Pre-check for credentials or @ before URL parsing to ensure credentials are never echoed in errors
+  if (trimmed.includes("@")) {
+    throw new Error("Invalid CORS origin: credentials are not allowed");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid CORS origin: must be a valid HTTP or HTTPS origin");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Invalid CORS origin: scheme must be http or https");
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error("Invalid CORS origin: credentials are not allowed");
+  }
+
+  if (parsed.search || trimmed.includes("?")) {
+    throw new Error("Invalid CORS origin: queries are not allowed");
+  }
+
+  if (parsed.hash || trimmed.includes("#")) {
+    throw new Error("Invalid CORS origin: fragments are not allowed");
+  }
+
+  // Canonical HTTP(S) origin consists of scheme, host, and optional port (no path or trailing slash).
+  const canonical = `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  if (trimmed.toLowerCase() !== canonical) {
+    throw new Error("Invalid CORS origin: paths and trailing slashes are not allowed");
+  }
+
+  return canonical;
+}
+
+/**
+ * Parses and validates comma-separated CORS_ORIGINS operator input.
+ */
+export function parseAndValidateCorsOrigins(raw?: string): string[] {
+  if (!raw || raw.trim() === "") {
+    return [];
+  }
+
+  const items = raw.split(",").map((s) => s.trim());
+  return items.map((item) => validateCorsOrigin(item));
+}
+
+/**
+ * Validates secret strength in production at startup.
+ *
+ * Rules:
+ * - In production, configured signing/API secrets must meet a documented minimum byte length.
+ * - Known placeholder-shaped values are rejected.
+ * - Errors name only the variable, never its value.
+ */
+export function validateProductionSecret(
+  varName: string,
+  value: string | undefined,
+  minBytes: number
+): void {
+  if (!value || value.trim() === "") {
+    return;
+  }
+
+  const byteLength = Buffer.byteLength(value, "utf8");
+  if (byteLength < minBytes) {
+    throw new Error(
+      `${varName} does not meet production strength requirements: must be at least ${minBytes} bytes`
+    );
+  }
+
+  const trimmed = value.trim();
+  for (const pattern of PLACEHOLDER_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      throw new Error(
+        `${varName} does not meet production strength requirements: placeholder value rejected`
+      );
+    }
+  }
+}
+
+export function validateProductionSecrets(environment: {
+  NODE_ENV: string;
+  SPONSORSHIP_SIGNING_SECRET?: string;
+  X402_FACILITATOR_API_KEY?: string;
+  DEMO_CLIENT_SECRET_KEY?: string;
+}): void {
+  if (environment.NODE_ENV !== "production") {
+    return;
+  }
+
+  validateProductionSecret(
+    "SPONSORSHIP_SIGNING_SECRET",
+    environment.SPONSORSHIP_SIGNING_SECRET,
+    MIN_PRODUCTION_SIGNING_SECRET_BYTES
+  );
+  validateProductionSecret(
+    "X402_FACILITATOR_API_KEY",
+    environment.X402_FACILITATOR_API_KEY,
+    MIN_PRODUCTION_API_KEY_BYTES
+  );
 }
 
 function loadEnv() {
@@ -77,12 +220,11 @@ if (!parsed.success || !parsed.data) {
 
 const env = parsed.data;
 
+validateProductionSecrets(env);
+
 export const config = {
   ...env,
-  corsOrigins: (env.CORS_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean),
+  corsOrigins: parseAndValidateCorsOrigins(env.CORS_ORIGINS),
   groqModel: env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile",
   demoMode: env.DEMO_MODE === "true",
   sponsorshipEnabled: env.SPONSORSHIP_ENABLED === "true",
