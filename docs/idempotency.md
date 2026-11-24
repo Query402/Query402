@@ -12,6 +12,8 @@ Idempotency-Key: <uuid>
 
 Clients generate a UUID per logical request and **reuse the same key** on safe retries (network blip, timeout). Generate a **new** key when inputs change.
 
+The header is optional. When present, the trimmed value must be non-empty and at most **128 characters** (`MAX_IDEMPOTENCY_KEY_LENGTH` in `@query402/shared`; UUID keys are 36 characters). Empty, repeated, or oversized headers are rejected with `400 invalid_idempotency_key` before any idempotency storage, payment settlement, or provider work.
+
 ## Fingerprint binding
 
 The server hashes a canonical JSON object:
@@ -30,18 +32,20 @@ Reusing `Idempotency-Key` with a **different fingerprint** → `409 idempotency_
 
 ## Covered routes
 
-| Route                | Method              |
-| -------------------- | ------------------- |
-| `GET /x402/search`   | Wallet / agent x402 |
-| `GET /x402/news`     | Wallet / agent x402 |
-| `GET /x402/scrape`   | Wallet / agent x402 |
-| `POST /api/paid/run` | Sponsored flow      |
+| Route                          | Method              |
+| ------------------------------ | ------------------- |
+| `GET /x402/search`             | Wallet / agent x402 |
+| `GET /x402/news`               | Wallet / agent x402 |
+| `GET /x402/scrape`             | Wallet / agent x402 |
+| `POST /api/paid/run`           | Sponsored flow      |
+| `POST /api/sponsorship/grants` | Grant issuance      |
 
 ## HTTP behavior
 
 | Situation                         | Status | Body                              |
 | --------------------------------- | ------ | --------------------------------- |
 | Cache hit (valid retry)           | `200`  | Original response                 |
+| Empty / repeated / oversized key  | `400`  | `invalid_idempotency_key`         |
 | In-flight duplicate               | `409`  | `idempotency_in_progress`         |
 | Key reused with different payload | `409`  | `idempotency_key_conflict`        |
 | Storage unavailable               | `503`  | `idempotency_storage_unavailable` |

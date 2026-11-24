@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { MAX_IDEMPOTENCY_KEY_LENGTH } from "@query402/shared";
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +92,52 @@ describe("x402 idempotency", () => {
     expect(second.body.traceId).toBe(first.body.traceId);
     expect(second.body.result.traceId).toBe(first.body.result.traceId);
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts an idempotency key at the documented maximum length", async () => {
+    const app = await createTestApp();
+    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH);
+
+    const first = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
+    expect(first.status).toBe(200);
+
+    const retry = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
+    expect(retry.status).toBe(200);
+    expect(retry.body.traceId).toBe(first.body.traceId);
+    expect(executeQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an idempotency key one character over the maximum before provider work", async () => {
+    const app = await createTestApp();
+    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
+
+    const response = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "Invalid Idempotency-Key header",
+      type: "invalid_idempotency_key",
+      errorCode: "invalid_idempotency_key"
+    });
+    expect(executeQueryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty and repeated idempotency keys before provider work", async () => {
+    const app = await createTestApp();
+
+    const empty = await demoPaidRequest(app).set("Idempotency-Key", "   ");
+    expect(empty.status).toBe(400);
+    expect(empty.body.errorCode).toBe("invalid_idempotency_key");
+
+    // superagent sends an array as two raw header lines; the cast is needed
+    // because its types only allow a single string value.
+    const repeated = await demoPaidRequest(app).set("Idempotency-Key", [
+      "first-key",
+      "second-key"
+    ] as unknown as string);
+    expect(repeated.status).toBe(400);
+    expect(repeated.body.errorCode).toBe("invalid_idempotency_key");
+    expect(executeQueryMock).not.toHaveBeenCalled();
   });
 
   it("returns 409 when idempotency key is reused with different inputs", async () => {

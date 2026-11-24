@@ -17,6 +17,7 @@ import {
 } from "./services/query-service.js";
 import { ProviderCatalogConflictError } from "./lib/pricing.js";
 import { createChallengeRateLimit, isUnpaidX402Request } from "./lib/challenge-rate-limit.js";
+import { INVALID_IDEMPOTENCY_KEY_BODY, validateIdempotencyKey } from "./lib/idempotency/key.js";
 
 const UNKNOWN_INTERNAL_ERROR_MESSAGE = "Internal server error";
 
@@ -135,6 +136,16 @@ app.use(
   })
 );
 app.use(securityHeaders());
+
+// Reject malformed idempotency keys before x402 settlement, sponsorship grant
+// issuance, idempotency storage access, or provider work can happen.
+app.use((req, res, next) => {
+  if (!validateIdempotencyKey(req).valid) {
+    return res.status(400).json(INVALID_IDEMPOTENCY_KEY_BODY);
+  }
+  return next();
+});
+
 app.use(express.json({ limit: config.API_JSON_BODY_MAX_BYTES }));
 export function logApiRequest(
   req: express.Request,

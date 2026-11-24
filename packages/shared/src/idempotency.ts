@@ -1,5 +1,15 @@
 import type { QueryMode } from "./types.js";
 
+/**
+ * Single source of truth for the maximum accepted `Idempotency-Key` length.
+ * The limit applies to the trimmed header value (in UTF-16 code units).
+ * Documented in `docs/idempotency.md`.
+ */
+export const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+
+/** Stable error code for an empty, repeated, or oversized `Idempotency-Key`. */
+export const INVALID_IDEMPOTENCY_KEY_ERROR = "invalid_idempotency_key";
+
 export interface PaidRequestFingerprintInput {
   method: "GET" | "POST";
   route: string;
