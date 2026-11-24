@@ -5,8 +5,71 @@ import { z } from "zod";
 import { credentialFreeHttpUrlSchema } from "@query402/shared";
 import { resolveApiDataPath } from "./storage/paths.js";
 
-function normalizeOrigin(origin: string) {
-  return origin.trim().replace(/\/+$/, "").toLowerCase();
+/**
+ * Validates a single CORS origin string at startup.
+ *
+ * Rules:
+ * - Accept only canonical HTTP(S) origins with scheme, host, and optional port.
+ * - Reject credentials, paths, queries, fragments, null, and wildcards.
+ * - Startup errors never echo embedded credentials.
+ */
+export function validateCorsOrigin(rawOrigin: string): string {
+  const trimmed = rawOrigin.trim();
+  if (!trimmed) {
+    throw new Error("Invalid CORS origin: empty origin is not allowed");
+  }
+
+  if (trimmed.toLowerCase() === "null" || trimmed === "*" || trimmed.includes("*")) {
+    throw new Error("Invalid CORS origin: wildcard or null origins are not allowed");
+  }
+
+  // Pre-check for credentials or @ before URL parsing to ensure credentials are never echoed in errors
+  if (trimmed.includes("@")) {
+    throw new Error("Invalid CORS origin: credentials are not allowed");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid CORS origin: must be a valid HTTP or HTTPS origin");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Invalid CORS origin: scheme must be http or https");
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error("Invalid CORS origin: credentials are not allowed");
+  }
+
+  if (parsed.search || trimmed.includes("?")) {
+    throw new Error("Invalid CORS origin: queries are not allowed");
+  }
+
+  if (parsed.hash || trimmed.includes("#")) {
+    throw new Error("Invalid CORS origin: fragments are not allowed");
+  }
+
+  // Canonical HTTP(S) origin consists of scheme, host, and optional port (no path or trailing slash).
+  const canonical = `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  if (trimmed.toLowerCase() !== canonical) {
+    throw new Error("Invalid CORS origin: paths and trailing slashes are not allowed");
+  }
+
+  return canonical;
+}
+
+/**
+ * Parses and validates comma-separated CORS_ORIGINS operator input.
+ */
+export function parseAndValidateCorsOrigins(raw?: string): string[] {
+  if (!raw || raw.trim() === "") {
+    return [];
+  }
+
+  const items = raw.split(",").map((s) => s.trim());
+  return items.map((item) => validateCorsOrigin(item));
 }
 
 function loadEnv() {
@@ -79,10 +142,7 @@ const env = parsed.data;
 
 export const config = {
   ...env,
-  corsOrigins: (env.CORS_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean),
+  corsOrigins: parseAndValidateCorsOrigins(env.CORS_ORIGINS),
   groqModel: env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile",
   demoMode: env.DEMO_MODE === "true",
   sponsorshipEnabled: env.SPONSORSHIP_ENABLED === "true",
