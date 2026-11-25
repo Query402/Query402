@@ -565,4 +565,125 @@ describe("public routes", () => {
       });
     });
   });
+
+  describe("date range validation (#334)", () => {
+    it("accepts a valid date range on /api/usage", async () => {
+      const app = await createPublicApp();
+      // 2023-01-01 to 2023-03-31 is exactly 90 days (not a leap year).
+      const response = await request(app).get("/api/usage?start_date=2023-01-01&end_date=2023-03-31");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts a valid date range on /api/analytics", async () => {
+      const app = await createPublicApp();
+      // 2023-01-01 to 2023-03-31 is exactly 90 days (not a leap year).
+      const response = await request(app).get("/api/analytics?start_date=2023-01-01&end_date=2023-03-31");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts missing date range parameters (unbounded)", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts only start_date without end_date", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?start_date=2023-01-01");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts only end_date without start_date", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?end_date=2023-12-31");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects reversed date range on /api/usage with stable 400", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?start_date=2023-06-01&end_date=2023-01-01");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "End date must be on or after the start date"
+      });
+    });
+
+    it("rejects reversed date range on /api/analytics with stable 400", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/analytics?start_date=2023-06-01&end_date=2023-01-01");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "End date must be on or after the start date"
+      });
+    });
+
+    it("rejects oversized date range (91 days) on /api/usage with stable 400", async () => {
+      const app = await createPublicApp();
+      // 2023-01-01 to 2023-04-02 is 92 days.
+      const response = await request(app).get("/api/usage?start_date=2023-01-01&end_date=2023-04-02");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "Date range exceeds the maximum allowed window of 90 days"
+      });
+    });
+
+    it("rejects oversized date range (91 days) on /api/analytics with stable 400", async () => {
+      const app = await createPublicApp();
+      // 2023-01-01 to 2023-04-02 is 92 days.
+      const response = await request(app).get("/api/analytics?start_date=2023-01-01&end_date=2023-04-02");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "Date range exceeds the maximum allowed window of 90 days"
+      });
+    });
+
+    it("rejects invalid start_date format on /api/usage", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?start_date=not-a-date&end_date=2023-12-31");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "start_date must be a valid ISO 8601 date or datetime"
+      });
+    });
+
+    it("rejects invalid end_date format on /api/analytics", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/analytics?start_date=2023-01-01&end_date=invalid");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "invalid_date_range",
+        message: "end_date must be a valid ISO 8601 date or datetime"
+      });
+    });
+
+    it("accepts same-day date range (zero-day window)", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?start_date=2023-06-15&end_date=2023-06-15");
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts datetime strings for date range", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?start_date=2023-01-01T00:00:00Z&end_date=2023-03-31T00:00:00Z");
+
+      expect(response.status).toBe(200);
+    });
+  });
 });

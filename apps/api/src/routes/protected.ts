@@ -3,9 +3,13 @@ import { searchQuerySchema, newsQuerySchema, scrapeQuerySchema } from "@query402
 import { executeQuery } from "../services/query-service.js";
 import { handlePaidX402Route } from "../lib/idempotency/x402.js";
 import { config } from "../lib/config.js";
-import { savePaymentAttempt, saveUsageEvent, getDetailedAnalyticsData } from "../lib/persistence.js";
+import {
+  savePaymentAttempt,
+  saveUsageEvent,
+  getDetailedAnalyticsData
+} from "../lib/persistence.js";
 import { getPaymentEvidence } from "../lib/payment-evidence.js";
-import { handlePaidX402Route } from "../lib/idempotency/x402.js";
+import { validateDateRange } from "../lib/date-range-validation.js";
 
 export const protectedRouter = Router();
 
@@ -99,12 +103,15 @@ protectedRouter.get("/x402/scrape", async (req, res, next) => {
 /**
  * Detailed analytics endpoint - for authorized access only
  * Includes transaction hashes and payer key hashes (but never full addresses)
- * GET /x402/analytics/detailed?cursor=<cursor>&limit=<limit>
+ * GET /x402/analytics/detailed?cursor=<cursor>&limit=<limit>&start_date=<date>&end_date=<date>
  */
 protectedRouter.get("/x402/analytics/detailed", (_req, res, next) => {
   try {
     const cursor = typeof _req.query.cursor === "string" ? _req.query.cursor : undefined;
     const limit = typeof _req.query.limit === "string" ? parseInt(_req.query.limit, 10) : undefined;
+    const startDate =
+      typeof _req.query.start_date === "string" ? _req.query.start_date : undefined;
+    const endDate = typeof _req.query.end_date === "string" ? _req.query.end_date : undefined;
 
     // Validate limit
     if (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100)) {
@@ -112,6 +119,12 @@ protectedRouter.get("/x402/analytics/detailed", (_req, res, next) => {
         error: "Invalid limit parameter",
         message: "limit must be a number between 1 and 100"
       });
+    }
+
+    // Validate date range using shared helper (uniform across analytics endpoints).
+    const dateRangeResult = validateDateRange(startDate, endDate);
+    if (!dateRangeResult.ok) {
+      return res.status(400).json(dateRangeResult.error);
     }
 
     const analytics = getDetailedAnalyticsData(cursor, limit);

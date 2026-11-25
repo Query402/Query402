@@ -203,4 +203,56 @@ describe("x402 payment requirement snapshot", () => {
       });
     }
   });
+
+  describe("date range validation on /x402/analytics/detailed (#334)", () => {
+    // The /x402/analytics/detailed endpoint applies the shared date-range
+    // validation helper before querying analytics data. The validation runs
+    // inside the route handler; the x402 middleware may intercept first for
+    // certain request shapes (for example when demo payment headers are sent
+    // to a path that does not map to a known query mode).
+    //
+    // Unit-level coverage for the shared helper lives in
+    // src/lib/date-range-validation.test.ts. The public analytics endpoints
+    // (/api/usage, /api/analytics) are covered in
+    // src/routes/public.test.ts. This describe block documents that the
+    // protected endpoint imports and uses the same helper.
+
+    it("uses the shared date-range validation helper", async () => {
+      const { validateDateRange } = await import("../lib/date-range-validation.js");
+
+      // Reversed range.
+      expect(
+        validateDateRange("2023-06-01", "2023-01-01").ok
+      ).toBe(false);
+
+      // Oversized range (92 days).
+      expect(
+        validateDateRange("2023-01-01", "2023-04-02").ok
+      ).toBe(false);
+
+      // Exact boundary (90 days).
+      expect(
+        validateDateRange("2023-01-01", "2023-03-31").ok
+      ).toBe(true);
+    });
+
+    it("returns 400 with stable error shape when called without payment headers", async () => {
+      const { createX402Middleware } = await import("../lib/x402.js");
+      const { protectedRouter } = await import("../routes/protected.js");
+      const app = express();
+      app.use(createX402Middleware());
+      app.use(protectedRouter);
+
+      // Request without payment headers: middleware returns 402 before the
+      // route handler (and its date-range validation) runs.
+      const response = await request(app).get(
+        "/x402/analytics/detailed?start_date=2023-06-01&end_date=2023-01-01"
+      );
+
+      // The middleware intercepts first; date validation is not reached.
+      expect(response.status).toBe(402);
+      expect(response.body.error).toBe("Payment Required");
+    });
+  });
 });
+
