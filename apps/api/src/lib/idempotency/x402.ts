@@ -122,10 +122,10 @@ export async function handlePaidX402Route(
     // with a different query is rejected rather than answered from cache.
     if (proofKey) {
       const existing = getResponseByPaymentProof(proofKey, requestHash);
-      if (existing.hit) {
+      if (existing?.hit) {
         return res.status(200).json(existing.body);
       }
-      if (existing.conflict) {
+      if (existing?.conflict) {
         return res.status(409).json({ error: "payment_proof_conflict" });
       }
     }
