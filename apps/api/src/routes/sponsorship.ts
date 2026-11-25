@@ -31,6 +31,14 @@ const previewRequestSchema = z.object({
 });
 
 export const sponsorshipRouter = Router();
+
+// Prevent browsers and proxies from caching short-lived sponsorship data
+// (challenges, grants, previews, denials, and rate-limited responses).
+sponsorshipRouter.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 const sponsorshipChallengeRateLimit = createChallengeRateLimit({
   limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
   maxClients: config.CHALLENGE_RATE_LIMIT_MAX_CLIENTS
