@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid";
-import { HTTPFacilitatorClient } from "@x402/core/server";
 import {
   paymentMiddlewareFromHTTPServer,
   x402HTTPResourceServer,
@@ -9,6 +8,7 @@ import { ExactStellarScheme } from "@x402/stellar/exact/server";
 import type { NextFunction, Request, Response } from "express";
 import type { HTTPRequestContext } from "@x402/core/server";
 import type { PaymentPayload } from "@x402/core/types";
+import { JsonFacilitatorClient } from "./facilitator-client.js";
 import {
   assertPriceMatch,
   buildChallengeAmountUnits,
@@ -331,7 +331,7 @@ export function createX402Middleware() {
         }
       : undefined;
 
-  const facilitatorClient = new HTTPFacilitatorClient({
+  const facilitatorClient = new JsonFacilitatorClient({
     url: config.X402_FACILITATOR_URL,
     createAuthHeaders
   });

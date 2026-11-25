@@ -1,0 +1,23 @@
+{
+  "acceptedContentTypes": [
+    "application/json",
+    "Application/JSON; Charset=UTF-8",
+    "application/json ; charset=\"utf-8\""
+  ],
+  "rejectedContentTypes": [
+    null,
+    "text/html",
+    "text/plain",
+    "application/problem+json",
+    "application/json; profile=example",
+    "application/json; charset=",
+    "application/json; charset=utf-8; charset=utf-8",
+    "application/json, text/html"
+  ],
+  "proxyBody": "<html>private-proxy-response</html>",
+  "invalidJsonBody": "{private-proxy-response",
+  "invalidDataBody": "{\"unexpected\":\"private-proxy-response\"}",
+  "verify": { "isValid": true },
+  "settle": { "success": true, "transaction": "test-transaction", "network": "stellar:testnet" },
+  "supported": { "kinds": [{ "x402Version": 2, "scheme": "exact", "network": "stellar:testnet" }] }
+}
