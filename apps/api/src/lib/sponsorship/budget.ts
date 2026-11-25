@@ -38,11 +38,7 @@ export function getDailyWindowStart(now = new Date()): string {
  * rate-limited (429) responses so clients can back off deterministically.
  */
 export function getRetryAfterSeconds(now = new Date()): number {
-  const todayStart = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate()
-  );
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
   return Math.max(0, Math.ceil((tomorrowStart - now.getTime()) / 1000));
 }

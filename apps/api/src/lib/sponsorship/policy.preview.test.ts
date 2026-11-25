@@ -189,10 +189,11 @@ describe("POST /api/sponsorship/preview", () => {
   let dbPath: string | undefined;
   let app: express.Express;
 
-  function buildApp() {
+  async function buildApp() {
+    const { sponsorshipRouter } = await import("../../routes/sponsorship.js");
     const expressApp = express();
     expressApp.use(express.json());
-    expressApp.use(require("../../routes/sponsorship.js").sponsorshipRouter);
+    expressApp.use(sponsorshipRouter);
     return expressApp;
   }
 
@@ -285,14 +286,12 @@ describe("strict sponsorship write payload validation (#329)", () => {
     dbPath = applySponsorshipTestEnv();
     app = await buildApp();
 
-    const response = await request(app)
-      .post("/api/sponsorship/grants")
-      .send({
-        wallet: TEST_WALLET,
-        challengeId: "00000000-0000-0000-0000-000000000000",
-        signature: "sig",
-        extraField: "should-be-rejected"
-      });
+    const response = await request(app).post("/api/sponsorship/grants").send({
+      wallet: TEST_WALLET,
+      challengeId: "00000000-0000-0000-0000-000000000000",
+      signature: "sig",
+      extraField: "should-be-rejected"
+    });
 
     expect(response.status).toBe(400);
     expect(JSON.stringify(response.body)).not.toContain("should-be-rejected");
@@ -302,14 +301,12 @@ describe("strict sponsorship write payload validation (#329)", () => {
     dbPath = applySponsorshipTestEnv();
     app = await buildApp();
 
-    const response = await request(app)
-      .post("/api/sponsorship/preview")
-      .send({
-        wallet: TEST_WALLET,
-        mode: "search",
-        provider: "search.basic",
-        extraField: "should-be-rejected"
-      });
+    const response = await request(app).post("/api/sponsorship/preview").send({
+      wallet: TEST_WALLET,
+      mode: "search",
+      provider: "search.basic",
+      extraField: "should-be-rejected"
+    });
 
     expect(response.status).toBe(400);
     expect(JSON.stringify(response.body)).not.toContain("should-be-rejected");
