@@ -2,7 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import type { DemoScenarioManifest } from "@query402/shared";
 import { buildCapabilityMatrix, getSortedProviders, providers } from "../lib/pricing.js";
-import { getAnalyticsSummary, getUsageEvents, getSettlementDigest } from "../lib/persistence.js";
+import {
+  getAnalyticsSummary,
+  getUsageEvents,
+  getSettlementDigest
+} from "../lib/persistence.js";
 import { config, getConfigSnapshot, getFacilitatorConfigured } from "../lib/config.js";
 import { apiVersion, buildMetadata } from "../lib/build-metadata.js";
 import { getCatalog } from "../services/query-service.js";
@@ -14,6 +18,9 @@ import {
 import { isStorageAvailable } from "../lib/storage/index.js";
 import { checkFacilitatorSupported } from "../lib/facilitator-check.js";
 import { isSchemaCurrent } from "../lib/storage/sqlite/store.js";
+import {
+  validateDateRange
+} from "../lib/date-range-validation.js";
 
 export const publicRouter = Router();
 
@@ -31,12 +38,16 @@ const overLimitErrorPayload = {
 
 const usageQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
-  offset: z.coerce.number().int().min(0).optional()
+  offset: z.coerce.number().int().min(0).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional()
 });
 
 const analyticsQuerySchema = z.object({
   recentUsageLimit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
-  recentPaymentLimit: z.coerce.number().int().min(1).max(MAX_PAYMENT_ATTEMPTS).optional()
+  recentPaymentLimit: z.coerce.number().int().min(1).max(MAX_PAYMENT_ATTEMPTS).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional()
 });
 
 publicRouter.get("/health", (_req, res) => {
@@ -113,6 +124,15 @@ publicRouter.get("/api/usage", async (req, res, next) => {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
 
+    // Validate date range using shared helper (uniform across analytics endpoints).
+    const dateRangeResult = validateDateRange(
+      parsed.data.start_date ?? undefined,
+      parsed.data.end_date ?? undefined
+    );
+    if (!dateRangeResult.ok) {
+      return res.status(400).json(dateRangeResult.error);
+    }
+
     const usage = await getUsageEvents({
       limit: parsed.data.limit,
       offset: parsed.data.offset
@@ -143,6 +163,15 @@ publicRouter.get("/api/analytics", async (req, res, next) => {
     const parsed = analyticsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
+    }
+
+    // Validate date range using shared helper (uniform across analytics endpoints).
+    const dateRangeResult = validateDateRange(
+      parsed.data.start_date ?? undefined,
+      parsed.data.end_date ?? undefined
+    );
+    if (!dateRangeResult.ok) {
+      return res.status(400).json(dateRangeResult.error);
     }
 
     const analytics = await getAnalyticsSummary({
