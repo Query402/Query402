@@ -9,6 +9,25 @@ function normalizeOrigin(origin: string) {
   return origin.trim().replace(/\/+$/, "").toLowerCase();
 }
 
+const MAX_CORS_ORIGIN_ENTRIES = 100;
+const MAX_CORS_ORIGINS_BYTES = 8 * 1024;
+
+export function parseCorsOrigins(value = ""): string[] {
+  const byteLength = Buffer.byteLength(value, "utf8");
+  if (byteLength > MAX_CORS_ORIGINS_BYTES) {
+    throw new Error(`CORS_ORIGINS exceeds the maximum size of ${MAX_CORS_ORIGINS_BYTES} bytes`);
+  }
+
+  const origins = [...new Set(value.split(",").map(normalizeOrigin).filter(Boolean))];
+  if (origins.length > MAX_CORS_ORIGIN_ENTRIES) {
+    throw new Error(
+      `CORS_ORIGINS exceeds the maximum of ${MAX_CORS_ORIGIN_ENTRIES} unique origins`
+    );
+  }
+
+  return origins;
+}
+
 function loadEnv() {
   const candidates = [
     path.resolve(process.cwd(), ".env"),
@@ -79,10 +98,7 @@ const env = parsed.data;
 
 export const config = {
   ...env,
-  corsOrigins: (env.CORS_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean),
+  corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   groqModel: env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile",
   demoMode: env.DEMO_MODE === "true",
   sponsorshipEnabled: env.SPONSORSHIP_ENABLED === "true",
