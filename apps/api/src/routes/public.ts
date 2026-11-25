@@ -14,6 +14,7 @@ import {
 import { isStorageAvailable } from "../lib/storage/index.js";
 import { checkFacilitatorSupported } from "../lib/facilitator-check.js";
 import { isSchemaCurrent } from "../lib/storage/sqlite/store.js";
+import { buildUsageEventsCsv } from "../lib/analytics-csv.js";
 
 export const publicRouter = Router();
 
@@ -37,6 +38,10 @@ const usageQuerySchema = z.object({
 const analyticsQuerySchema = z.object({
   recentUsageLimit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
   recentPaymentLimit: z.coerce.number().int().min(1).max(MAX_PAYMENT_ATTEMPTS).optional()
+});
+
+const analyticsCsvExportQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_EXPORT_SIZE).optional()
 });
 
 publicRouter.get("/health", (_req, res) => {
@@ -150,6 +155,29 @@ publicRouter.get("/api/analytics", async (req, res, next) => {
       recentPaymentLimit: parsed.data.recentPaymentLimit
     });
     res.json(analytics);
+  } catch (error) {
+    next(error);
+  }
+});
+
+publicRouter.get("/api/analytics/export.csv", async (req, res, next) => {
+  try {
+    if (checkOverLimit(req.query.limit)) {
+      return res.status(400).json(overLimitErrorPayload);
+    }
+
+    const parsed = analyticsCsvExportQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+
+    const usage = await getUsageEvents({ limit: parsed.data.limit ?? MAX_EXPORT_SIZE });
+    const csv = buildUsageEventsCsv(usage);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="query402-analytics.csv"');
+    res.setHeader("Cache-Control", "no-store");
+    res.send(csv);
   } catch (error) {
     next(error);
   }
