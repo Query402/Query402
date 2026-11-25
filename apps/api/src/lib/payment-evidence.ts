@@ -168,7 +168,14 @@ export function assertRequestMatchesEvidence(req: Request, evidence: PaymentEvid
   assertPriceMatchesProvider(evidence);
 }
 
-export function buildEvidenceFromRequirements(input: {}): PaymentEvidence {
+export function buildEvidenceFromRequirements(input: {
+  req: Request;
+  requirements: PaymentRequirements;
+  paymentPayload?: PaymentPayload;
+  verifyResult?: VerifyResponse;
+  settleResult?: SettleResponse;
+  failure?: string;
+}): PaymentEvidence {
   const mode = routeModeFromPath(input.req.path);
   const providerId = getProviderFromRequest(input.req);
   if (!mode || typeof providerId !== "string") {

@@ -5,7 +5,6 @@ import { handlePaidX402Route } from "../lib/idempotency/x402.js";
 import { config } from "../lib/config.js";
 import { savePaymentAttempt, saveUsageEvent, getDetailedAnalyticsData } from "../lib/persistence.js";
 import { getPaymentEvidence } from "../lib/payment-evidence.js";
-import { handlePaidX402Route } from "../lib/idempotency/x402.js";
 
 export const protectedRouter = Router();
 
