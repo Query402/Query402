@@ -32,6 +32,21 @@ export function getDailyWindowStart(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+/**
+ * Seconds remaining until the current daily budget window resets (next UTC
+ * midnight). Used to populate a standards-compliant `Retry-After` header on
+ * rate-limited (429) responses so clients can back off deterministically.
+ */
+export function getRetryAfterSeconds(now = new Date()): number {
+  const todayStart = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  );
+  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((tomorrowStart - now.getTime()) / 1000));
+}
+
 function exceedsBudgetLimit(spentUsd: number, amountUsd: number, limitUsd: number): boolean {
   return Number((spentUsd + amountUsd).toFixed(6)) > Number(limitUsd.toFixed(6));
 }

@@ -311,4 +311,137 @@ describe("POST /api/paid/run sponsorship", () => {
     expect(conflict.body.error).toBe("idempotency_key_conflict");
     expect(runPaidRequestMock).toHaveBeenCalledTimes(1);
   });
+
+  describe("strict write payload validation (#329)", () => {
+    it("rejects unknown fields in /api/paid/run body with a stable 400", async () => {
+      dbPath = applySponsorshipTestEnv();
+      const app = await createTestApp();
+      const signedGrant = await createSignedGrant();
+
+      const response = await request(app)
+        .post("/api/paid/run")
+        .set("X-Sponsorship-Grant", encodeGrantHeader(signedGrant))
+        .send({
+          mode: "search",
+          provider: "search.basic",
+          wallet: TEST_WALLET,
+          query: "test query",
+          payment: "should-be-ignored",
+          extraField: 123
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it("does not echo submitted values in validation error responses", async () => {
+      dbPath = applySponsorshipTestEnv();
+      const app = await createTestApp();
+      const signedGrant = await createSignedGrant();
+
+      const response = await request(app)
+        .post("/api/paid/run")
+        .set("X-Sponsorship-Grant", encodeGrantHeader(signedGrant))
+        .send({
+          mode: "search",
+          provider: "search.basic",
+          wallet: TEST_WALLET,
+          query: "test query",
+          payment: "secret-query-value",
+          extraField: "https://secret.example.com"
+        });
+
+      expect(response.status).toBe(400);
+      const body = JSON.stringify(response.body);
+      expect(body).not.toContain("secret-query-value");
+      expect(body).not.toContain("https://secret.example.com");
+    });
+
+    it("preserves every documented payload without unknown fields", async () => {
+      dbPath = applySponsorshipTestEnv();
+      const app = await createTestApp();
+      const signedGrant = await createSignedGrant();
+      mockSuccessfulPayment();
+
+      const searchResponse = await request(app)
+        .post("/api/paid/run")
+        .set("X-Sponsorship-Grant", encodeGrantHeader(signedGrant))
+        .send({
+          mode: "search",
+          provider: "search.basic",
+          wallet: TEST_WALLET,
+          query: "test query"
+        });
+      expect(searchResponse.status).toBe(200);
+
+      const scrapeResponse = await request(app)
+        .post("/api/paid/run")
+        .set("X-Sponsorship-Grant", encodeGrantHeader(await createSignedGrant()))
+        .send({
+          mode: "scrape",
+          provider: "scrape.page",
+          wallet: TEST_WALLET,
+          url: "https://example.com"
+        });
+      expect(scrapeResponse.status).toBe(200);
+    });
+  });
+
+  describe("Retry-After on rate-limited responses (#326)", () => {
+    it("includes Retry-After header when per-wallet budget is exceeded", async () => {
+      dbPath = applySponsorshipTestEnv({
+        SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD: "0.01"
+      });
+      const app = await createTestApp();
+
+      const firstGrant = await createSignedGrant();
+      const first = await postPaidRun(app, firstGrant);
+      expect(first.status).toBe(200);
+
+      const secondGrant = await createSignedGrant();
+      const second = await postPaidRun(app, secondGrant);
+
+      expect(second.status).toBe(429);
+      expect(second.body.error).toBe("wallet_budget_exceeded");
+      expect(second.headers["retry-after"]).toBeDefined();
+      expect(Number(second.headers["retry-after"])).toBeGreaterThan(0);
+    });
+
+    it("includes Retry-After header when global budget is exceeded", async () => {
+      dbPath = applySponsorshipTestEnv({
+        SPONSORSHIP_GLOBAL_DAILY_BUDGET_USD: "0.01",
+        SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD: "1"
+      });
+      const app = await createTestApp();
+
+      const firstGrant = await createSignedGrant({ wallet: TEST_WALLET });
+      expect((await postPaidRun(app, firstGrant)).status).toBe(200);
+
+      const secondGrant = await createSignedGrant({ wallet: OTHER_WALLET });
+      const second = await postPaidRun(app, secondGrant, { wallet: OTHER_WALLET });
+
+      expect(second.status).toBe(429);
+      expect(second.body.error).toBe("global_budget_exceeded");
+      expect(second.headers["retry-after"]).toBeDefined();
+      expect(Number(second.headers["retry-after"])).toBeGreaterThan(0);
+    });
+
+    it("derives Retry-After from the remaining daily window", async () => {
+      dbPath = applySponsorshipTestEnv({
+        SPONSORSHIP_PER_WALLET_DAILY_BUDGET_USD: "0.01"
+      });
+      const app = await createTestApp();
+
+      const firstGrant = await createSignedGrant();
+      expect((await postPaidRun(app, firstGrant)).status).toBe(200);
+
+      const secondGrant = await createSignedGrant();
+      const second = await postPaidRun(app, secondGrant);
+      expect(second.status).toBe(429);
+
+      const { getRetryAfterSeconds } = await import("../lib/sponsorship/budget.js");
+      const expected = String(getRetryAfterSeconds());
+      expect(second.headers["retry-after"]).toBe(expected);
+    });
+  });
 });
