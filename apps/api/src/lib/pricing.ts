@@ -119,6 +119,19 @@ export function buildChallengeAmountUnits(providerId: string): number {
   return challengeUnits;
 }
 
+export function buildX402Challenge(input: { providerId: string; catalogPriceMicroUsd: number }): { amountMicroUsd: number } {
+  const provider = getProviderById(input.providerId);
+  if (!provider) {
+    throw new Error(`Provider not found: ${input.providerId}`);
+  }
+  const challengeUnits = buildChallengeAmountUnits(input.providerId);
+  const expectedMicroUsd = Math.round(provider.priceUsd * USD_UNITS_PER_DOLLAR);
+  if (challengeUnits !== input.catalogPriceMicroUsd) {
+    throw new PriceMismatchError(challengeUnits, input.catalogPriceMicroUsd);
+  }
+  return { amountMicroUsd: challengeUnits };
+}
+
 const envKeyMapping: Record<string, string[]> = {
   "search.live": ["GROQ_API_KEY"],
   "search.basic": ["GROQ_API_KEY"],
