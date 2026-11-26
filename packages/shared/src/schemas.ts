@@ -38,20 +38,29 @@ export const providerSchema = z.object({
   enabled: z.boolean()
 });
 
+/** Maximum length for provider identifiers in paid route queries. */
+export const MAX_PROVIDER_ID_LENGTH = 64;
+
+/** Maximum length for search and news query strings (`q`). */
+export const MAX_QUERY_LENGTH = 512;
+
+/** Maximum length for scrape target URLs (`url`). */
+export const MAX_SCRAPE_URL_LENGTH = 2048;
+
 export const baseQuerySchema = z.object({
-  provider: z.string().min(1)
+  provider: z.string().min(1).max(MAX_PROVIDER_ID_LENGTH)
 });
 
 export const searchQuerySchema = baseQuerySchema.extend({
-  q: z.string().min(2)
+  q: z.string().min(2).max(MAX_QUERY_LENGTH)
 });
 
 export const newsQuerySchema = baseQuerySchema.extend({
-  q: z.string().min(2)
+  q: z.string().min(2).max(MAX_QUERY_LENGTH)
 });
 
 export const scrapeQuerySchema = baseQuerySchema.extend({
-  url: z.string().url()
+  url: z.string().max(MAX_SCRAPE_URL_LENGTH).url()
 });
 
 export const providerCapabilitySchema = z.object({

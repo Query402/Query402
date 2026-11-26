@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  baseQuerySchema,
   credentialFreeHttpUrlSchema,
   latencyBandSchema,
+  MAX_PROVIDER_ID_LENGTH,
+  MAX_QUERY_LENGTH,
+  MAX_SCRAPE_URL_LENGTH,
   MICRO_USD_PER_USD,
   newsQuerySchema,
   paymentChallengeSchema,
@@ -162,6 +166,16 @@ describe("slaBadgesSchema", () => {
   });
 });
 
+describe("baseQuerySchema", () => {
+  it("accepts provider at max length and rejects one over max length", () => {
+    const atLimit = "a".repeat(MAX_PROVIDER_ID_LENGTH);
+    const overLimit = "a".repeat(MAX_PROVIDER_ID_LENGTH + 1);
+
+    expect(baseQuerySchema.parse({ provider: atLimit })).toEqual({ provider: atLimit });
+    expect(baseQuerySchema.safeParse({ provider: overLimit }).success).toBe(false);
+  });
+});
+
 describe("searchQuerySchema", () => {
   it("requires provider and a query of at least two characters", () => {
     expect(searchQuerySchema.parse({ provider: "search.basic", q: "stellar" })).toEqual({
@@ -171,6 +185,23 @@ describe("searchQuerySchema", () => {
     expect(searchQuerySchema.safeParse({ provider: "search.basic", q: "x" }).success).toBe(false);
     expect(searchQuerySchema.safeParse({ q: "stellar" }).success).toBe(false);
   });
+
+  it("enforces maximum lengths for provider and q", () => {
+    const atLimitQ = "q".repeat(MAX_QUERY_LENGTH);
+    const overLimitQ = "q".repeat(MAX_QUERY_LENGTH + 1);
+    const overLimitProvider = "p".repeat(MAX_PROVIDER_ID_LENGTH + 1);
+
+    expect(searchQuerySchema.parse({ provider: "search.basic", q: atLimitQ })).toEqual({
+      provider: "search.basic",
+      q: atLimitQ
+    });
+    expect(searchQuerySchema.safeParse({ provider: "search.basic", q: overLimitQ }).success).toBe(
+      false
+    );
+    expect(searchQuerySchema.safeParse({ provider: overLimitProvider, q: "stellar" }).success).toBe(
+      false
+    );
+  });
 });
 
 describe("newsQuerySchema", () => {
@@ -179,6 +210,21 @@ describe("newsQuerySchema", () => {
       provider: "news.fast",
       q: "payments"
     });
+  });
+
+  it("enforces maximum lengths for provider and q", () => {
+    const atLimitQ = "n".repeat(MAX_QUERY_LENGTH);
+    const overLimitQ = "n".repeat(MAX_QUERY_LENGTH + 1);
+    const overLimitProvider = "p".repeat(MAX_PROVIDER_ID_LENGTH + 1);
+
+    expect(newsQuerySchema.parse({ provider: "news.fast", q: atLimitQ })).toEqual({
+      provider: "news.fast",
+      q: atLimitQ
+    });
+    expect(newsQuerySchema.safeParse({ provider: "news.fast", q: overLimitQ }).success).toBe(false);
+    expect(newsQuerySchema.safeParse({ provider: overLimitProvider, q: "payments" }).success).toBe(
+      false
+    );
   });
 });
 
@@ -190,6 +236,30 @@ describe("scrapeQuerySchema", () => {
     expect(scrapeQuerySchema.safeParse({ provider: "scrape.page", url: "not-a-url" }).success).toBe(
       false
     );
+  });
+
+  it("enforces maximum lengths for provider and url", () => {
+    const base = "https://example.com/";
+    const atLimitUrl = base + "a".repeat(MAX_SCRAPE_URL_LENGTH - base.length);
+    const overLimitUrl = base + "a".repeat(MAX_SCRAPE_URL_LENGTH - base.length + 1);
+    const overLimitProvider = "p".repeat(MAX_PROVIDER_ID_LENGTH + 1);
+
+    expect(atLimitUrl).toHaveLength(MAX_SCRAPE_URL_LENGTH);
+    expect(overLimitUrl).toHaveLength(MAX_SCRAPE_URL_LENGTH + 1);
+
+    expect(scrapeQuerySchema.parse({ provider: "scrape.page", url: atLimitUrl })).toEqual({
+      provider: "scrape.page",
+      url: atLimitUrl
+    });
+    expect(
+      scrapeQuerySchema.safeParse({ provider: "scrape.page", url: overLimitUrl }).success
+    ).toBe(false);
+    expect(
+      scrapeQuerySchema.safeParse({
+        provider: overLimitProvider,
+        url: "https://example.com/page"
+      }).success
+    ).toBe(false);
   });
 });
 

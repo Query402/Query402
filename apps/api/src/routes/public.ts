@@ -9,7 +9,8 @@ import { getCatalog } from "../services/query-service.js";
 import {
   MAX_EXPORT_SIZE,
   MAX_PAYMENT_ATTEMPTS,
-  MAX_USAGE_EVENTS
+  MAX_USAGE_EVENTS,
+  MAX_USAGE_OFFSET
 } from "../lib/storage/constants.js";
 import { isStorageAvailable } from "../lib/storage/index.js";
 import { checkFacilitatorSupported } from "../lib/facilitator-check.js";
@@ -31,7 +32,7 @@ const overLimitErrorPayload = {
 
 const usageQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_EVENTS).optional(),
-  offset: z.coerce.number().int().min(0).optional()
+  offset: z.coerce.number().int().min(0).max(MAX_USAGE_OFFSET).optional()
 });
 
 const analyticsQuerySchema = z.object({
