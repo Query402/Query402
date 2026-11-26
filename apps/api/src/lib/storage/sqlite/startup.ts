@@ -1,16 +1,11 @@
 import { config } from "../../config.js";
 import { logger } from "../../logger.js";
-import {
-  MigrationError,
-  expectedSchemaVersion,
-  getAnalyticsDb,
-  isSchemaCurrent
-} from "./store.js";
+import { MigrationError, expectedSchemaVersion, getAnalyticsDb, isSchemaCurrent } from "./store.js";
 
-export function bootApi(deps: {
-  openDatabase?: () => void;
-  listen: () => void;
-}): { listening: boolean; failedVersion: number | null } {
+export function bootApi(deps: { openDatabase?: () => void; listen: () => void }): {
+  listening: boolean;
+  failedVersion: number | null;
+} {
   const openDatabase =
     deps.openDatabase ??
     (() => {

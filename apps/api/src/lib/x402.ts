@@ -11,14 +11,13 @@ import type { HTTPRequestContext } from "@x402/core/server";
 import type { PaymentPayload } from "@x402/core/types";
 import {
   assertPriceMatch,
+  assertSafePriceUnits,
   buildChallengeAmountUnits,
   getProviderById,
   getProviderPriceUnits,
   protectedRouteBasePrices,
   unitsToUsdString,
   usdStringToUnits,
-  PriceMismatchError,
-  UnsafePriceError,
   ZeroPriceError
 } from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
@@ -128,6 +127,32 @@ export function resolveRoutePriceUnits(context: HTTPRequestContext, mode: RouteM
   return getProviderPriceUnits(providerId);
 }
 
+export type X402Challenge = {
+  providerId: string;
+  amountMicroUsd: number;
+};
+
+/**
+ * Builds an x402 challenge amount from the same integer price the catalog
+ * advertises, so a rounding difference can never silently change what a buyer
+ * is charged.
+ */
+export function buildX402Challenge(input: {
+  providerId: string;
+  catalogPriceMicroUsd: number;
+}): X402Challenge {
+  if (input.catalogPriceMicroUsd === 0) {
+    throw new ZeroPriceError(input.providerId);
+  }
+
+  assertSafePriceUnits(input.catalogPriceMicroUsd);
+
+  const challengeUnits = buildChallengeAmountUnits(input.providerId);
+  assertPriceMatch(challengeUnits, input.catalogPriceMicroUsd);
+
+  return { providerId: input.providerId, amountMicroUsd: challengeUnits };
+}
+
 export function buildRouteChallengePrice(context: HTTPRequestContext, mode: RouteMode): string {
   const providerId = getProviderFromContext(context);
   if (!providerId) {
@@ -148,9 +173,8 @@ export function buildRouteChallengePrice(context: HTTPRequestContext, mode: Rout
   }
 
   const catalogUnits = getProviderPriceUnits(providerId);
-  const challengeUnits = buildChallengeAmountUnits(providerId);
-  assertPriceMatch(challengeUnits, catalogUnits);
-  return unitsToUsdString(challengeUnits);
+  const challenge = buildX402Challenge({ providerId, catalogPriceMicroUsd: catalogUnits });
+  return unitsToUsdString(challenge.amountMicroUsd);
 }
 
 function clonePaymentPayload(paymentPayload: unknown): PaymentPayload | undefined {
@@ -185,7 +209,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
       setPaymentEvidence(req, buildDemoPaymentEvidence(req));
     } catch (error) {
       return next(error);
-  }
+    }
     return next();
   }
 

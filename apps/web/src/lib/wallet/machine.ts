@@ -5,11 +5,7 @@ type Subscriber = (state: WalletState) => void;
 /** Strip any signing payload from error text so XDR never lands in state/UI. */
 function safeSignErrorMessage(error: unknown, payload: string): string {
   const raw =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "Signing failed";
+    error instanceof Error ? error.message : typeof error === "string" ? error : "Signing failed";
   if (!payload) return raw || "Signing failed";
   return raw.split(payload).join("[redacted]") || "Signing failed";
 }
@@ -147,8 +143,7 @@ export class WalletSessionMachine {
   }): Promise<void> {
     if (!this.adapter) throw new Error("No adapter set");
 
-    const expected =
-      this.targetNetworkPassphrase ?? opts?.networkPassphrase;
+    const expected = this.targetNetworkPassphrase ?? opts?.networkPassphrase;
 
     if (
       opts?.networkPassphrase &&

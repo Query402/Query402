@@ -21,9 +21,7 @@ describe("SearchAdapter", () => {
 
   describe("execute", () => {
     it("should reject call with no payment reference", async () => {
-      await expect(adapter.execute("test query")).rejects.toThrow(
-        UnauthorizedProviderAccessError
-      );
+      await expect(adapter.execute("test query")).rejects.toThrow(UnauthorizedProviderAccessError);
       await expect(adapter.execute("test query")).rejects.toThrow(
         "Provider search.basic requires payment verification"
       );

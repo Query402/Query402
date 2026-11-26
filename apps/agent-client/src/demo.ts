@@ -37,9 +37,7 @@ export async function runDemo(fetchImpl: typeof fetch = fetch): Promise<void> {
     console.log(`Items: ${payload?.result?.items?.length ?? 0}`);
   }
 
-  console.log(
-    "\nDemo complete. Inspect /api/analytics in the backend for updated spend history."
-  );
+  console.log("\nDemo complete. Inspect /api/analytics in the backend for updated spend history.");
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

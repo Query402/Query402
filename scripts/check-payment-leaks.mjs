@@ -332,7 +332,9 @@ async function runSelfTest() {
   for (const fail of failingCases) {
     const leaks = findLeaks(fail.text);
     if (leaks.length === 0) {
-      console.error(`Self-test failed: Expected leak for pattern "${fail.pattern}", but none found.`);
+      console.error(
+        `Self-test failed: Expected leak for pattern "${fail.pattern}", but none found.`
+      );
       process.exit(1);
     }
     const matchedLeak = leaks.find((l) => l.pattern === fail.pattern);

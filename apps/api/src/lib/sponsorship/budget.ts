@@ -21,10 +21,7 @@ export class SponsorshipPreviewMismatchError extends Error {
     public readonly expectedAmountUsd: number,
     public readonly actualAmountUsd: number
   ) {
-    super(
-
-      `preview amount ${expectedAmountUsd} does not match budget amount ${actualAmountUsd}`
-    );
+    super(`preview amount ${expectedAmountUsd} does not match budget amount ${actualAmountUsd}`);
   }
 }
 
@@ -188,7 +185,10 @@ function roundUsd(value: number): number {
   return Number(value.toFixed(6));
 }
 
-export function readBudgetSnapshot(wallet: string, windowStart = getDailyWindowStart()): BudgetSnapshot {
+export function readBudgetSnapshot(
+  wallet: string,
+  windowStart = getDailyWindowStart()
+): BudgetSnapshot {
   const database = getSponsorshipDb();
   const walletSpentUsd = readSpentUsd(database, "wallet", wallet, windowStart);
   const globalSpentUsd = readSpentUsd(database, "global", null, windowStart);

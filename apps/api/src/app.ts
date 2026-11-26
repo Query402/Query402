@@ -17,6 +17,7 @@ import {
 } from "./services/query-service.js";
 import { ProviderCatalogConflictError } from "./lib/pricing.js";
 import { createChallengeRateLimit, isUnpaidX402Request } from "./lib/challenge-rate-limit.js";
+import { createRequestIdMiddleware, REQUEST_ID_HEADER } from "./lib/request-id.js";
 
 const UNKNOWN_INTERNAL_ERROR_MESSAGE = "Internal server error";
 
@@ -140,15 +141,24 @@ app.use(
   })
 );
 app.use(securityHeaders());
+app.use(createRequestIdMiddleware());
 app.use(express.json({ limit: config.API_JSON_BODY_MAX_BYTES }));
 export function logApiRequest(
   req: express.Request,
-  _res: express.Response,
+  res: express.Response,
   next: express.NextFunction
 ) {
   // `req.url` includes the query string. Paid queries and scrape targets are
   // user-controlled and must not be copied into application logs.
-  logger.info({ method: req.method, path: req.path }, "incoming request");
+  logger.info(
+    {
+      requestId: res.locals.requestId,
+      requestIdSource: res.locals.requestIdSource,
+      method: req.method,
+      path: req.path
+    },
+    "incoming request"
+  );
   next();
 }
 

@@ -34,7 +34,11 @@ function buildPaymentRequired(overrides: {
   if (overrides.emptyAccepts) {
     return {
       x402Version: 2,
-      resource: { url: "http://localhost:3001/x402/search", description: "search", mimeType: "application/json" },
+      resource: {
+        url: "http://localhost:3001/x402/search",
+        description: "search",
+        mimeType: "application/json"
+      },
       accepts: []
     };
   }
@@ -121,8 +125,9 @@ describe("quote-bind helpers", () => {
     const challenge = extractChallengeFromPaymentRequired(
       buildPaymentRequired({ expiresAt: "2020-01-01T00:00:00.000Z" })
     );
-    expect(() => assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z")))
-      .toThrow(QuoteBindError);
+    expect(() =>
+      assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z"))
+    ).toThrow(QuoteBindError);
     try {
       assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z"));
     } catch (error) {
@@ -132,7 +137,9 @@ describe("quote-bind helpers", () => {
 
   it("rejects an empty challenge", () => {
     expect(() => assertChallengeMatchesQuote(exactQuote, null)).toThrow(QuoteBindError);
-    expect(extractChallengeFromPaymentRequired(buildPaymentRequired({ emptyAccepts: true }))).toBeNull();
+    expect(
+      extractChallengeFromPaymentRequired(buildPaymentRequired({ emptyAccepts: true }))
+    ).toBeNull();
   });
 });
 
@@ -142,8 +149,8 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
       expiresAt: "2099-01-01T00:00:00.000Z"
     });
     const sign = vi.fn().mockResolvedValue({ "PAYMENT-SIGNATURE": "signed-fixture" });
-    let calls = 0;
-    const fetchStub = vi.fn(async (url: RequestInfo | URL) => {
+    let paidCalls = 0;
+    const fetchStub = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const href = String(url);
       if (href.includes("/api/providers")) {
         return new Response(
@@ -153,10 +160,12 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
           { status: 200, headers: { "content-type": "application/json" } }
         );
       }
-      calls += 1;
-      if (calls === 1) {
+      // Behave like the real endpoint: unpaid probes get the 402 challenge,
+      // and only a request carrying a payment signature is served.
+      if (!new Headers(init?.headers).has("PAYMENT-SIGNATURE")) {
         return challengeResponse(paymentRequired);
       }
+      paidCalls += 1;
       return new Response(JSON.stringify({ ok: true, result: { priceUsd: PRICE_USD } }), {
         status: 200,
         headers: { "content-type": "application/json", "payment-response": "demo" }
@@ -190,6 +199,7 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
     );
 
     expect(sign).toHaveBeenCalledTimes(1);
+    expect(paidCalls).toBe(1);
     expect(result.status).toBe(200);
     expect(result.ok).toBe(true);
     expect(result.quote).toEqual(exactQuote);
