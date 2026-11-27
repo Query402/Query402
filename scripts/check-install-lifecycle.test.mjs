@@ -33,10 +33,7 @@ test("rejects every blocked lifecycle script without exposing command bodies", a
     const scripts = Object.fromEntries(
       LIFECYCLE_SCRIPTS.map((scriptName) => [scriptName, "DO_NOT_PRINT_OR_EXECUTE"])
     );
-    await writeFile(
-      path.join(root, "apps", "sample", "package.json"),
-      JSON.stringify({ scripts })
-    );
+    await writeFile(path.join(root, "apps", "sample", "package.json"), JSON.stringify({ scripts }));
 
     const result = spawnSync(process.execPath, [CHECKER_PATH], {
       cwd: root,

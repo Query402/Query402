@@ -218,10 +218,7 @@ describe("WalletSessionMachine", () => {
     // User clicked pay; wallet network flips before Freighter opens.
     adapter.silentNetworkChange("PUBLIC", "TESTNET");
 
-    await assert.rejects(
-      () => machine.signAuthEntry("auth_entry_xdr"),
-      /Wrong network/i
-    );
+    await assert.rejects(() => machine.signAuthEntry("auth_entry_xdr"), /Wrong network/i);
     assert.strictEqual(adapter.signAuthEntryCalls, 0);
     assert.strictEqual(machine.getState().status, "wrong-network");
   });
@@ -235,11 +232,14 @@ describe("WalletSessionMachine", () => {
     const payload = "AAAAAGPAYLOAD_MUST_NOT_LEAK";
     adapter.signErrorWithPayload = `Freighter failed for ${payload}`;
 
-    await assert.rejects(() => machine.signTransaction(payload), (err: Error) => {
-      assert.ok(!err.message.includes(payload), "error must not contain payload");
-      assert.ok(err.message.includes("[redacted]"));
-      return true;
-    });
+    await assert.rejects(
+      () => machine.signTransaction(payload),
+      (err: Error) => {
+        assert.ok(!err.message.includes(payload), "error must not contain payload");
+        assert.ok(err.message.includes("[redacted]"));
+        return true;
+      }
+    );
     assert.ok(!String(machine.getState().error ?? "").includes(payload));
   });
 
