@@ -229,7 +229,7 @@ registerHooks({
     if (specifier === "@stellar/freighter-api") {
       return {
         url: "data:text/javascript,export const signMessage = async () => ({ error: new Error('stub') });",
-        shortCircuit: true,
+        shortCircuit: true
       };
     }
     return nextResolve(specifier, context);
@@ -345,7 +345,11 @@ describe("BudgetGate", () => {
     const id = gate.beginRequest();
     gate.applyResponse(
       id,
-      makePreview({ available: false, decision: "denied_budget_exceeded", reason: "wallet_budget_exceeded" })
+      makePreview({
+        available: false,
+        decision: "denied_budget_exceeded",
+        reason: "wallet_budget_exceeded"
+      })
     );
     assert.strictEqual(gate.decision.allowed, false);
     assert.strictEqual(gate.decision.reason, "wallet_budget_exceeded");
@@ -356,7 +360,11 @@ describe("BudgetGate", () => {
     const id = gate.beginRequest();
     gate.applyResponse(
       id,
-      makePreview({ available: false, decision: "denied_wrong_provider", reason: "unknown_provider" })
+      makePreview({
+        available: false,
+        decision: "denied_wrong_provider",
+        reason: "unknown_provider"
+      })
     );
     assert.strictEqual(gate.decision.allowed, false);
     assert.strictEqual(gate.decision.reason, "unknown_provider");
@@ -377,7 +385,11 @@ describe("BudgetGate", () => {
     // The newer deny arrives and is applied.
     gate.applyResponse(
       secondId,
-      makePreview({ available: false, decision: "denied_budget_exceeded", reason: "wallet_budget_exceeded" })
+      makePreview({
+        available: false,
+        decision: "denied_budget_exceeded",
+        reason: "wallet_budget_exceeded"
+      })
     );
     assert.strictEqual(gate.decision.allowed, false);
     assert.strictEqual(gate.decision.reason, "wallet_budget_exceeded");
@@ -391,7 +403,11 @@ describe("BudgetGate", () => {
 
     gate.applyResponse(
       firstId,
-      makePreview({ available: false, decision: "denied_budget_exceeded", reason: "wallet_budget_exceeded" })
+      makePreview({
+        available: false,
+        decision: "denied_budget_exceeded",
+        reason: "wallet_budget_exceeded"
+      })
     );
     // Stale deny must not override the newer allow.
     gate.applyResponse(secondId, makePreview({ available: true }));

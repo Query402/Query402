@@ -72,17 +72,13 @@ export async function findLifecycleViolations(root = process.cwd()) {
 
   const violations = [];
   for (const manifestPath of manifestPaths) {
-    const manifest = manifestPath === rootManifestPath
-      ? rootManifest
-      : await readManifest(manifestPath, root);
+    const manifest =
+      manifestPath === rootManifestPath ? rootManifest : await readManifest(manifestPath, root);
     const relativePath = path.relative(root, manifestPath).replaceAll("\\", "/");
 
     for (const scriptName of LIFECYCLE_SCRIPTS) {
       const allowlistKey = `${relativePath}:${scriptName}`;
-      if (
-        Object.hasOwn(manifest.scripts ?? {}, scriptName) &&
-        !ALLOWLIST.has(allowlistKey)
-      ) {
+      if (Object.hasOwn(manifest.scripts ?? {}, scriptName) && !ALLOWLIST.has(allowlistKey)) {
         violations.push({ path: relativePath, scriptName });
       }
     }

@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertPriceMatch,
+  assertSafePriceUnits,
   buildCapabilityMatrix,
+  buildChallengeAmountUnits,
   computeSlaBadge,
   deriveSlaBadges,
   getProviderById,
   getProvidersByCategory,
   getSortedProviders,
+  PriceMismatchError,
+  priceUsdToUnits,
   ProviderCatalogConflictError,
   protectedRouteBasePrices,
   providers,
-  validateProviderCatalog
+  UnsafePriceError,
+  validateProviderCatalog,
+  ZeroPriceError
 } from "./pricing.js";
 import { applySponsorshipTestEnv } from "../test/sponsorship-test-helpers.js";
 
@@ -61,12 +68,20 @@ describe("provider pricing", () => {
   });
 
   it("returns provider-specific prices for search, news, and scrape", () => {
-    expect(getProviderById("search.basic")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/search"].slice(1)));
+    expect(getProviderById("search.basic")?.priceUsd).toBe(
+      Number(protectedRouteBasePrices["GET /x402/search"].slice(1))
+    );
     expect(getProviderById("search.pro")?.priceUsd).toBe(0.02);
-    expect(getProviderById("news.fast")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/news"].slice(1)));
+    expect(getProviderById("news.fast")?.priceUsd).toBe(
+      Number(protectedRouteBasePrices["GET /x402/news"].slice(1))
+    );
     expect(getProviderById("news.deep")?.priceUsd).toBe(0.03);
-    expect(getProviderById("scrape.page")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1)));
-    expect(getProviderById("scrape.extract")?.priceUsd).toBe(Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1)) * 2);
+    expect(getProviderById("scrape.page")?.priceUsd).toBe(
+      Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1))
+    );
+    expect(getProviderById("scrape.extract")?.priceUsd).toBe(
+      Number(protectedRouteBasePrices["GET /x402/scrape"].slice(1)) * 2
+    );
   });
 
   it("formats dynamic provider prices consistently", async () => {
@@ -348,48 +363,32 @@ describe("x402 cross-layer price consistency", () => {
 
 describe("x402 challenge building from catalog integer prices", () => {
   it("builds a challenge amount equal to the catalog integer price", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    const { getProviderById } = require("./pricing.js");
     const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
-    const challenge = buildX402Challenge({
-      providerId: provider!.id,
-      catalogPriceMicroUsd: Math.round(provider!.priceUsd * 1_000_000),
-    });
-    expect(challenge.amountMicroUsd).toBe(Math.round(provider!.priceUsd * 1_000_000));
+    const catalogUnits = priceUsdToUnits(provider!.priceUsd);
+    expect(buildChallengeAmountUnits(provider!.id)).toBe(catalogUnits);
   });
 
   it("rejects a one-unit difference and does not run the provider", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    const { getProviderById } = require("./pricing.js");
     const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
-    const catalogPriceMicroUsd = Math.round(provider!.priceUsd * 1_000_000);
-    expect(() =>
-      buildX402Challenge({
-        providerId: provider!.id,
-        catalogPriceMicroUsd: catalogPriceMicroUsd + 1,
-      })
-    ).toThrow();
+    const catalogUnits = priceUsdToUnits(provider!.priceUsd);
+    expect(() => assertPriceMatch(catalogUnits + 1, catalogUnits)).toThrow(PriceMismatchError);
   });
 
   it("rejects a zero price and does not build a challenge", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    expect(() =>
-      buildX402Challenge({
-        providerId: "search.basic",
-        catalogPriceMicroUsd: 0,
-      })
-    ).toThrow();
+    const provider = providers.find((p) => p.id === "search.basic");
+    expect(provider).toBeDefined();
+    const originalPrice = provider!.priceUsd;
+    provider!.priceUsd = 0;
+    try {
+      expect(() => buildChallengeAmountUnits("search.basic")).toThrow(ZeroPriceError);
+    } finally {
+      provider!.priceUsd = originalPrice;
+    }
   });
 
   it("rejects a price above the safe integer range", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    expect(() =>
-      buildX402Challenge({
-        providerId: "search.basic",
-        catalogPriceMicroUsd: Number.MAX_SAFE_INTEGER + 1,
-      })
-    ).toThrow();
+    expect(() => assertSafePriceUnits(Number.MAX_SAFE_INTEGER + 1)).toThrow(UnsafePriceError);
   });
 });

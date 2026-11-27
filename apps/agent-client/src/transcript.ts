@@ -57,10 +57,7 @@ const RAW_PAYMENT_HEADER_KEYS = new Set([
 ]);
 
 export type TranscriptRejectReason =
-  | "unknown_version"
-  | "missing_payment_reference"
-  | "mismatched_provider"
-  | "invalid_schema";
+  "unknown_version" | "missing_payment_reference" | "mismatched_provider" | "invalid_schema";
 
 export class TranscriptValidationError extends Error {
   readonly reason: TranscriptRejectReason;
@@ -182,10 +179,7 @@ function walkForRawPaymentHeaders(value: unknown): void {
   }
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     const normalized = key.toLowerCase().replace(/[-\s]/g, "");
-    if (
-      RAW_PAYMENT_HEADER_KEYS.has(key.toLowerCase()) ||
-      RAW_PAYMENT_HEADER_KEYS.has(normalized)
-    ) {
+    if (RAW_PAYMENT_HEADER_KEYS.has(key.toLowerCase()) || RAW_PAYMENT_HEADER_KEYS.has(normalized)) {
       throw new TranscriptValidationError(
         "invalid_schema",
         `Refusing to write raw payment header field "${key}" into the transcript`
@@ -235,8 +229,7 @@ function hasFlag(flag: string, args: string[]): boolean {
 export function runAppendReceiptCli(argv: string[]): void {
   const receiptPath = readArg("--append-receipt", argv);
   const expectedProvider = readArg("--provider", argv);
-  const transcriptPath =
-    readArg("--transcript", argv) ?? DEFAULT_AGENT_RECEIPT_TRANSCRIPT;
+  const transcriptPath = readArg("--transcript", argv) ?? DEFAULT_AGENT_RECEIPT_TRANSCRIPT;
 
   if (!receiptPath) {
     console.error("Missing --append-receipt <path-to-receipt.json>");
@@ -393,10 +386,7 @@ function buildReceiptFromPaidQuery(
   const status = evidence?.status;
   const kind = evidence?.kind;
   const normalizedStatus =
-    status === "verified" ||
-    status === "settled" ||
-    status === "failed" ||
-    status === "demo-paid"
+    status === "verified" || status === "settled" || status === "failed" || status === "demo-paid"
       ? status
       : response.isDemoMode
         ? "demo-paid"

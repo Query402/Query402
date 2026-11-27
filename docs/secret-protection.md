@@ -13,10 +13,10 @@
 
 The states below are unverified because the available GitHub account does not have repository administration access.
 
-| Control | State |
-| --- | --- |
-| Secret scanning | Unverified |
-| Push protection | Unverified |
-| Non-provider patterns | Unverified |
-| Validity checks | Unverified |
+| Control                                | State      |
+| -------------------------------------- | ---------- |
+| Secret scanning                        | Unverified |
+| Push protection                        | Unverified |
+| Non-provider patterns                  | Unverified |
+| Validity checks                        | Unverified |
 | Protection for pushes targeting `main` | Unverified |

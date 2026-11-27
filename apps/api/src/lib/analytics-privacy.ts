@@ -15,8 +15,7 @@ export function hashPayerKey(payerPublicKey: string | undefined): string | undef
 
 /** Result of preparing an analytics record for durable storage. */
 export type AnalyticsPrivacyResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; cannotRedact: string[] };
+  { ok: true; value: T } | { ok: false; cannotRedact: string[] };
 
 /** Fields whose values are payment headers / payloads and must be dropped. */
 const DROPPED_PAYMENT_HEADER_FIELDS = new Set([
@@ -141,9 +140,10 @@ function looksUnredactable(key: string): boolean {
   );
 }
 
-function redactHeadersRecord(
-  headers: Record<string, unknown>
-): { headers: Record<string, unknown>; cannotRedact: string[] } {
+function redactHeadersRecord(headers: Record<string, unknown>): {
+  headers: Record<string, unknown>;
+  cannotRedact: string[];
+} {
   const next: Record<string, unknown> = {};
   const cannotRedact: string[] = [];
 
