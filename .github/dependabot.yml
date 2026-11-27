@@ -1,10 +1,21 @@
 version: 2
+# Labels are pinned to labels this repository already has. Without a `labels`
+# key Dependabot applies its defaults and creates any that are missing, which
+# is how `dependencies`, `javascript` and `github_actions` appeared here; naming
+# them keeps a future ecosystem from inventing another one.
+#
+# `target-branch` is deliberately absent. Updates already open against the
+# default branch (`main`), and setting the key would turn Dependabot security
+# updates off for this configuration — the opposite of what #223 asks for.
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
     groups:
       compatible-npm:
         applies-to: version-updates
@@ -19,3 +30,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github_actions"
