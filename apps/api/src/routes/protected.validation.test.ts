@@ -13,17 +13,18 @@ vi.mock("../services/query-service.js", async (importOriginal) => {
   };
 });
 
+// Pass implementations to vi.fn() so they survive vi.restoreAllMocks() in afterEach.
 vi.mock("../lib/persistence.js", () => ({
-  persistPaymentAndUsage: vi.fn().mockResolvedValue(undefined),
-  savePaymentAttempt: vi.fn().mockResolvedValue(undefined)
+  persistPaymentAndUsage: vi.fn(async () => undefined),
+  savePaymentAttempt: vi.fn(async () => undefined)
 }));
 
 vi.mock("../lib/idempotency/service.js", () => ({
-  getResponseByPaymentProof: vi.fn().mockReturnValue({ hit: false }),
+  getResponseByPaymentProof: vi.fn(() => ({ hit: false })),
   savePaymentProofResponse: vi.fn(),
-  isIdempotencyStorageAvailable: vi.fn().mockReturnValue(true),
-  acquireIdempotencyLock: vi.fn().mockReturnValue({ state: "acquired" }),
-  getCachedIdempotencyResponse: vi.fn().mockReturnValue({ hit: false }),
+  isIdempotencyStorageAvailable: vi.fn(() => true),
+  acquireIdempotencyLock: vi.fn(() => ({ state: "acquired" })),
+  getCachedIdempotencyResponse: vi.fn(() => ({ hit: false })),
   cacheIdempotencyResponse: vi.fn(),
   releaseIdempotencyLock: vi.fn()
 }));

@@ -1,4 +1,5 @@
 import type { PaymentRequired, PaymentRequirements } from "@x402/core/types";
+import { DEFAULT_TOKEN_DECIMALS } from "@x402/stellar";
 
 /**
  * Client-side challenge validation for the agent CLI.
@@ -31,15 +32,16 @@ export type ChallengeValidationResult =
   { ok: true; requirements: PaymentRequirements } | { ok: false; mismatch: ChallengeMismatch };
 
 /**
- * Amounts are quoted in asset smallest units (USDC has 6 decimals). Compare
- * with integer math to stay float-safe.
+ * Amounts are quoted in asset smallest units. Stellar USDC has 7 decimals
+ * (DEFAULT_TOKEN_DECIMALS in @x402/stellar), the same scale the API and
+ * quote binding use via convertToTokenAmount.
  */
 export function parseAmountToUsd(amount: string): number | null {
   if (!/^\d+(\.\d+)?$/.test(amount.trim())) {
     return null;
   }
   const parsed = Number(amount);
-  return Number.isFinite(parsed) ? parsed / 1_000_000 : null;
+  return Number.isFinite(parsed) ? parsed / 10 ** DEFAULT_TOKEN_DECIMALS : null;
 }
 
 function resourceProvider(challenge: PaymentRequired): string | null {
