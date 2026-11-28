@@ -9,7 +9,8 @@ import {
   ProviderCatalogConflictError,
   protectedRouteBasePrices,
   providers,
-  validateProviderCatalog
+  validateProviderCatalog,
+  buildX402Challenge
 } from "./pricing.js";
 import { applySponsorshipTestEnv } from "../test/sponsorship-test-helpers.js";
 
@@ -348,8 +349,6 @@ describe("x402 cross-layer price consistency", () => {
 
 describe("x402 challenge building from catalog integer prices", () => {
   it("builds a challenge amount equal to the catalog integer price", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    const { getProviderById } = require("./pricing.js");
     const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
     const challenge = buildX402Challenge({
@@ -360,8 +359,6 @@ describe("x402 challenge building from catalog integer prices", () => {
   });
 
   it("rejects a one-unit difference and does not run the provider", () => {
-    const { buildX402Challenge } = require("./x402.js");
-    const { getProviderById } = require("./pricing.js");
     const provider = getProviderById("search.basic");
     expect(provider).toBeDefined();
     const catalogPriceMicroUsd = Math.round(provider!.priceUsd * 1_000_000);
@@ -374,7 +371,6 @@ describe("x402 challenge building from catalog integer prices", () => {
   });
 
   it("rejects a zero price and does not build a challenge", () => {
-    const { buildX402Challenge } = require("./x402.js");
     expect(() =>
       buildX402Challenge({
         providerId: "search.basic",
@@ -384,7 +380,6 @@ describe("x402 challenge building from catalog integer prices", () => {
   });
 
   it("rejects a price above the safe integer range", () => {
-    const { buildX402Challenge } = require("./x402.js");
     expect(() =>
       buildX402Challenge({
         providerId: "search.basic",
