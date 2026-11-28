@@ -3,7 +3,11 @@ import cors from "cors";
 import { publicRouter } from "./routes/public.js";
 import { protectedRouter } from "./routes/protected.js";
 import { paidRouter } from "./routes/demo.js";
-import { sponsorshipRouter } from "./routes/sponsorship.js";
+import {
+  noStoreSponsorshipResponses,
+  sponsorshipRouter,
+  SPONSORSHIP_PATH_PREFIX
+} from "./routes/sponsorship.js";
 import { createX402Middleware } from "./lib/x402.js";
 import { securityHeaders } from "./lib/security-headers.js";
 import { logger } from "./lib/logger.js";
@@ -136,6 +140,10 @@ app.use(
   })
 );
 app.use(securityHeaders());
+// Scoped to the sponsorship path so requests that only pass through the root-mounted
+// router keep their normal caching, and mounted ahead of the parser so a malformed or
+// oversized JSON body (which never reaches a route) still gets no-store.
+app.use(SPONSORSHIP_PATH_PREFIX, noStoreSponsorshipResponses());
 app.use(express.json({ limit: config.API_JSON_BODY_MAX_BYTES }));
 export function logApiRequest(
   req: express.Request,

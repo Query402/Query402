@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { queryModeSchema, stellarPublicKeySchema } from "@query402/shared";
 import { z } from "zod";
 import { config } from "../lib/config.js";
@@ -31,13 +31,25 @@ const previewRequestSchema = z.object({
   provider: z.string().min(1)
 });
 
+export const SPONSORSHIP_PATH_PREFIX = "/api/sponsorship";
+
+/**
+ * Prevent browsers and proxies from caching short-lived sponsorship data
+ * (challenges, grants, previews, denials, and rate-limited responses).
+ *
+ * Mounted by the app on `SPONSORSHIP_PATH_PREFIX` ahead of the JSON body
+ * parser rather than inside the router: the router is mounted at root, so a
+ * router-level middleware would also stamp unrelated routes, and a JSON parse
+ * failure is raised before routing and so would never reach it.
+ */
+export function noStoreSponsorshipResponses() {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  };
+}
+
 export const sponsorshipRouter = Router();
-// Prevent browsers and proxies from caching short-lived sponsorship data
-// (challenges, grants, previews, denials, and rate-limited responses).
-sponsorshipRouter.use((_req, res, next) => {
-  res.set("Cache-Control", "no-store");
-  next();
-});
 // Declared-JSON check, registered ahead of every POST route below: a body sent as text, a
 // form or with no media type is refused with 415 before it is validated, signed or stored.
 sponsorshipRouter.post(
