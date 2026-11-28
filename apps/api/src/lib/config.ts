@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { credentialFreeHttpUrlSchema } from "@query402/shared";
 import { resolveApiDataPath } from "./storage/paths.js";
+import { parseTrustedProxies } from "./client-address.js";
 
 function normalizeOrigin(origin: string) {
   return origin.trim().replace(/\/+$/, "").toLowerCase();
@@ -80,6 +81,9 @@ const envSchema = z.object({
   SPONSORSHIP_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
   CHALLENGE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(60),
   CHALLENGE_RATE_LIMIT_MAX_CLIENTS: z.coerce.number().int().positive().default(10_000),
+  // Comma-separated proxy IPs/CIDRs. Empty (default) ignores forwarding headers.
+  TRUSTED_PROXIES: z.string().optional(),
+  TRUSTED_PROXY_HEADER: z.enum(["x-forwarded-for", "forwarded"]).default("x-forwarded-for"),
   SPONSORSHIP_GRANT_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SPONSORSHIP_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   SPONSORSHIP_DB_PATH: z.string().min(1).default("data/sponsorship.db"),
@@ -104,7 +108,8 @@ export const config = {
   sponsorshipEnabled: env.SPONSORSHIP_ENABLED === "true",
   sponsorshipDbPath: resolveApiDataPath(env.SPONSORSHIP_DB_PATH),
   analyticsDbPath: resolveApiDataPath(env.ANALYTICS_DB_PATH),
-  analyticsStorage: env.ANALYTICS_STORAGE
+  analyticsStorage: env.ANALYTICS_STORAGE,
+  trustedProxies: parseTrustedProxies(env.TRUSTED_PROXIES, env.TRUSTED_PROXY_HEADER)
 };
 
 export function getFacilitatorConfigured(): boolean {

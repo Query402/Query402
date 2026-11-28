@@ -159,6 +159,7 @@ app.use(
   createChallengeRateLimit({
     limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
     maxClients: config.CHALLENGE_RATE_LIMIT_MAX_CLIENTS,
+    trustedProxies: config.trustedProxies,
     shouldLimit: isUnpaidX402Request
   })
 );

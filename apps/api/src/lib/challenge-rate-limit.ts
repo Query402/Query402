@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import {
+  NO_TRUSTED_PROXIES,
+  resolveClientAddress,
+  type TrustedProxyConfig
+} from "./client-address.js";
 
 type Window = { count: number; resetAt: number };
 
@@ -9,6 +14,8 @@ export type ChallengeRateLimitOptions = {
   maxClients?: number;
   now?: () => number;
   shouldLimit?: (req: Request) => boolean;
+  /** Proxies whose forwarding headers may identify the client. Defaults to none. */
+  trustedProxies?: TrustedProxyConfig;
 };
 
 export function hashClientIdentifier(identifier: string): string {
@@ -58,8 +65,8 @@ export class FixedWindowRateLimiter {
   }
 }
 
-function clientKey(req: Request): string {
-  return hashClientIdentifier(req.ip || req.socket.remoteAddress || "unknown-client");
+function clientKey(req: Request, trustedProxies: TrustedProxyConfig): string {
+  return hashClientIdentifier(resolveClientAddress(req, trustedProxies));
 }
 
 export function createChallengeRateLimit(options: ChallengeRateLimitOptions): RequestHandler {
@@ -68,7 +75,10 @@ export function createChallengeRateLimit(options: ChallengeRateLimitOptions): Re
   return (req: Request, res: Response, next: NextFunction) => {
     if (options.shouldLimit && !options.shouldLimit(req)) return next();
 
-    const result = limiter.consume(clientKey(req), options.now?.());
+    const result = limiter.consume(
+      clientKey(req, options.trustedProxies ?? NO_TRUSTED_PROXIES),
+      options.now?.()
+    );
     if (result.allowed) return next();
 
     res.set("Retry-After", String(result.retryAfterSeconds));
