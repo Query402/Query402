@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Response } from "express";
 import { queryModeSchema, stellarPublicKeySchema } from "@query402/shared";
 import { z } from "zod";
 import { config } from "../lib/config.js";
@@ -12,6 +12,7 @@ import {
 } from "../lib/sponsorship/idempotency.js";
 import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
 import { isIdempotencyStorageAvailable } from "../lib/idempotency/service.js";
+import { INVALID_IDEMPOTENCY_KEY_BODY, validateIdempotencyKey } from "../lib/idempotency/key.js";
 import { createChallengeRateLimit } from "../lib/challenge-rate-limit.js";
 import { requireJsonContentType } from "../lib/require-json-content-type.js";
 
@@ -51,11 +52,6 @@ function signingNotConfigured(res: Response) {
   return res.status(503).json({ error: "sponsorship_signing_not_configured" });
 }
 
-function readSponsorshipIdempotencyKey(req: Request): string | undefined {
-  const key = req.get("Idempotency-Key")?.trim();
-  return key ? key : undefined;
-}
-
 sponsorshipRouter.post("/api/sponsorship/challenge", sponsorshipChallengeRateLimit, (req, res) => {
   if (!config.sponsorshipEnabled) {
     return sponsorshipDisabled(res);
@@ -72,6 +68,11 @@ sponsorshipRouter.post("/api/sponsorship/challenge", sponsorshipChallengeRateLim
 
 sponsorshipRouter.post("/api/sponsorship/grants", (req, res, next) => {
   try {
+    const keyValidation = validateIdempotencyKey(req);
+    if (!keyValidation.valid) {
+      return res.status(400).json(INVALID_IDEMPOTENCY_KEY_BODY);
+    }
+
     if (!config.sponsorshipEnabled) {
       return sponsorshipDisabled(res);
     }
@@ -89,7 +90,7 @@ sponsorshipRouter.post("/api/sponsorship/grants", (req, res, next) => {
     // grant instead of minting (and later debiting) a second one. The replay
     // hash binds the key to the payer wallet so a key cannot be reused across
     // wallets, and challenge consumption below is still one-shot.
-    const idempotencyKey = readSponsorshipIdempotencyKey(req);
+    const idempotencyKey = keyValidation.key;
     let idempotencyInput: SponsorshipIdempotencyInput | undefined;
     if (idempotencyKey) {
       if (!isIdempotencyStorageAvailable()) {

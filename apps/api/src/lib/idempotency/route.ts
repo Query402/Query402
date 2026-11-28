@@ -8,10 +8,10 @@ import {
   isIdempotencyStorageAvailable,
   releaseIdempotencyLock
 } from "./service.js";
+import { INVALID_IDEMPOTENCY_KEY_BODY, validateIdempotencyKey } from "./key.js";
 
 export function readIdempotencyKey(req: Request): string | undefined {
-  const key = req.get("Idempotency-Key")?.trim();
-  return key ? key : undefined;
+  return validateIdempotencyKey(req).key;
 }
 
 export function buildRequestHash(input: PaidRequestFingerprintInput): string {
@@ -27,7 +27,12 @@ export function beginIdempotency(
   req: Request,
   fingerprintInput: PaidRequestFingerprintInput
 ): IdempotencyGateResult {
-  const idempotencyKey = readIdempotencyKey(req);
+  const validation = validateIdempotencyKey(req);
+  if (!validation.valid) {
+    return { action: "error", statusCode: 400, body: INVALID_IDEMPOTENCY_KEY_BODY };
+  }
+
+  const idempotencyKey = validation.key;
   if (!idempotencyKey) {
     return { action: "continue" };
   }
