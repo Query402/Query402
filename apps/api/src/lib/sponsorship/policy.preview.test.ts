@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi} from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import {
@@ -250,5 +250,81 @@ describe("POST /api/sponsorship/preview", () => {
     expect(response.status).toBe(200);
     expect(response.body.sponsorshipEnabled).toBe(false);
     expect(response.body.decision).toBe("denied_sponsorship_disabled");
+  });
+});
+
+describe("strict sponsorship write payload validation (#329)", () => {
+  let dbPath: string | undefined;
+  let app: express.Express;
+
+  async function buildApp() {
+    const { sponsorshipRouter } = await import("../../routes/sponsorship.js");
+    const expressApp = express();
+    expressApp.use(express.json());
+    expressApp.use(sponsorshipRouter);
+    return expressApp;
+  }
+
+  afterEach(async () => {
+    await resetSponsorshipStore(dbPath);
+    vi.restoreAllMocks();
+  });
+
+  it("rejects unknown fields on /api/sponsorship/challenge with 400", async () => {
+    dbPath = applySponsorshipTestEnv();
+    app = await buildApp();
+
+    const response = await request(app)
+      .post("/api/sponsorship/challenge")
+      .send({ wallet: TEST_WALLET, extraField: "should-be-rejected" });
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).not.toContain("should-be-rejected");
+  });
+
+  it("rejects unknown fields on /api/sponsorship/grants with 400", async () => {
+    dbPath = applySponsorshipTestEnv();
+    app = await buildApp();
+
+    const response = await request(app).post("/api/sponsorship/grants").send({
+      wallet: TEST_WALLET,
+      challengeId: "00000000-0000-0000-0000-000000000000",
+      signature: "sig",
+      extraField: "should-be-rejected"
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).not.toContain("should-be-rejected");
+  });
+
+  it("rejects unknown fields on /api/sponsorship/preview with 400", async () => {
+    dbPath = applySponsorshipTestEnv();
+    app = await buildApp();
+
+    const response = await request(app).post("/api/sponsorship/preview").send({
+      wallet: TEST_WALLET,
+      mode: "search",
+      provider: "search.basic",
+      extraField: "should-be-rejected"
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).not.toContain("should-be-rejected");
+  });
+
+  it("preserves documented sponsorship payloads", async () => {
+    dbPath = applySponsorshipTestEnv();
+    app = await buildApp();
+
+    const challenge = await request(app)
+      .post("/api/sponsorship/challenge")
+      .send({ wallet: TEST_WALLET });
+    expect(challenge.status).toBe(200);
+
+    const preview = await request(app)
+      .post("/api/sponsorship/preview")
+      .send({ wallet: TEST_WALLET, mode: "search", provider: "search.basic" });
+    expect(preview.status).toBe(200);
+    expect(preview.body.available).toBe(true);
   });
 });

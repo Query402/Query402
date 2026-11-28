@@ -23,8 +23,13 @@ export class ProviderCatalogConflictError extends Error {
 
 export class PriceMismatchError extends Error {
   readonly code = "price_mismatch" as const;
-  constructor(readonly challengeUnits: number, readonly catalogUnits: number) {
-    super(`x402 challenge amount (${challengeUnits}) does not match catalog price (${catalogUnits})`);
+  constructor(
+    readonly challengeUnits: number,
+    readonly catalogUnits: number
+  ) {
+    super(
+      `x402 challenge amount (${challengeUnits}) does not match catalog price (${catalogUnits})`
+    );
     this.name = "PriceMismatchError";
   }
 }
@@ -117,6 +122,25 @@ export function buildChallengeAmountUnits(providerId: string): number {
   const challengeUnits = catalogUnits;
   assertPriceMatch(challengeUnits, catalogUnits);
   return challengeUnits;
+}
+
+export function buildX402Challenge(input: { providerId: string; catalogPriceMicroUsd: number }): {
+  amountMicroUsd: number;
+} {
+  const { providerId, catalogPriceMicroUsd } = input;
+  const catalogUnits = getProviderPriceUnits(providerId);
+
+  if (catalogUnits === 0 || catalogPriceMicroUsd === 0) {
+    throw new ZeroPriceError(providerId);
+  }
+
+  assertSafePriceUnits(catalogPriceMicroUsd);
+
+  if (catalogPriceMicroUsd !== catalogUnits) {
+    throw new PriceMismatchError(catalogPriceMicroUsd, catalogUnits);
+  }
+
+  return { amountMicroUsd: catalogUnits };
 }
 
 const envKeyMapping: Record<string, string[]> = {

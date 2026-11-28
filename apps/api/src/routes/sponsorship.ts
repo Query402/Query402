@@ -14,21 +14,27 @@ import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
 import { isIdempotencyStorageAvailable } from "../lib/idempotency/service.js";
 import { createChallengeRateLimit } from "../lib/challenge-rate-limit.js";
 
-const challengeRequestSchema = z.object({
-  wallet: stellarPublicKeySchema
-});
+const challengeRequestSchema = z
+  .object({
+    wallet: stellarPublicKeySchema
+  })
+  .strict();
 
-const grantRequestSchema = z.object({
-  wallet: stellarPublicKeySchema,
-  challengeId: z.string().uuid(),
-  signature: z.string().min(1)
-});
+const grantRequestSchema = z
+  .object({
+    wallet: stellarPublicKeySchema,
+    challengeId: z.string().uuid(),
+    signature: z.string().min(1)
+  })
+  .strict();
 
-const previewRequestSchema = z.object({
-  wallet: stellarPublicKeySchema,
-  mode: queryModeSchema,
-  provider: z.string().min(1)
-});
+const previewRequestSchema = z
+  .object({
+    wallet: stellarPublicKeySchema,
+    mode: queryModeSchema,
+    provider: z.string().min(1)
+  })
+  .strict();
 
 export const sponsorshipRouter = Router();
 const sponsorshipChallengeRateLimit = createChallengeRateLimit({

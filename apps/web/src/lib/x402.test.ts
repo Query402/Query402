@@ -46,11 +46,15 @@ function headerNames(init: RequestInit | undefined): string[] {
   return [...new Headers(init?.headers).keys()];
 }
 
+const TARGET_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+
 /** A minimal in-memory wallet machine: connected signer, no Freighter needed. */
 function fakeWallet(): WalletSessionMachine {
   const state: WalletState = { status: "connected", address: PAYER };
   return {
     getState: () => state,
+    // The x402 signer reads the API payment network from the machine.
+    getTargetNetworkPassphrase: () => TARGET_NETWORK_PASSPHRASE,
     signAuthEntry: async (authEntryXdr: string) => ({
       signedAuthEntry: authEntryXdr,
       signerAddress: PAYER

@@ -35,8 +35,11 @@ export class ChallengeMismatchError extends Error {
  * server's provider/network/asset/amount disagrees with the config; the
  * signer is never constructed on that path.
  */
-export async function fetchValidatedChallenge(endpoint: string): Promise<PaymentRequired> {
-  const probe = await fetch(endpoint, { method: "GET" });
+export async function fetchValidatedChallenge(
+  endpoint: string,
+  fetchFn: typeof fetch = fetch
+): Promise<PaymentRequired> {
+  const probe = await fetchFn(endpoint, { method: "GET" });
   if (probe.status !== 402) {
     throw new Error(`Expected a 402 challenge from ${endpoint} but got status ${probe.status}.`);
   }
@@ -254,6 +257,9 @@ export async function runPaidQuery(
       }
       throw error;
     }
+    // When the quote is resolved from the catalog, validate the challenge
+    // before asking for a signature.
+    await fetchValidatedChallenge(endpoint, fetchFn);
   }
 
   const idempotencyKey = getIdempotencyKey(
@@ -295,11 +301,9 @@ export async function runPaidQuery(
             throw new Error("DEMO_CLIENT_SECRET_KEY is required when DEMO_MODE is false");
           }
 
-          // Issue #176: compare the 402 challenge to this CLI's configuration
-          // BEFORE asking for a signature. This fetches and validates the
-          // challenge; on mismatch it throws and the signer below is never
-          // constructed.
-          await fetchValidatedChallenge(endpoint);
+          // Issue #176: the challenge is validated by fetchWithQuoteBoundPayment
+          // before any signature is constructed; on mismatch the signer is
+          // never constructed.
 
           const wallet = deps.createWallet
             ? deps.createWallet(secretKey ?? "test-secret", network)

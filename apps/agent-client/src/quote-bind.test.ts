@@ -34,7 +34,11 @@ function buildPaymentRequired(overrides: {
   if (overrides.emptyAccepts) {
     return {
       x402Version: 2,
-      resource: { url: "http://localhost:3001/x402/search", description: "search", mimeType: "application/json" },
+      resource: {
+        url: "http://localhost:3001/x402/search",
+        description: "search",
+        mimeType: "application/json"
+      },
       accepts: []
     };
   }
@@ -121,8 +125,9 @@ describe("quote-bind helpers", () => {
     const challenge = extractChallengeFromPaymentRequired(
       buildPaymentRequired({ expiresAt: "2020-01-01T00:00:00.000Z" })
     );
-    expect(() => assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z")))
-      .toThrow(QuoteBindError);
+    expect(() =>
+      assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z"))
+    ).toThrow(QuoteBindError);
     try {
       assertChallengeMatchesQuote(exactQuote, challenge, Date.parse("2026-01-01T00:00:00.000Z"));
     } catch (error) {
@@ -132,7 +137,9 @@ describe("quote-bind helpers", () => {
 
   it("rejects an empty challenge", () => {
     expect(() => assertChallengeMatchesQuote(exactQuote, null)).toThrow(QuoteBindError);
-    expect(extractChallengeFromPaymentRequired(buildPaymentRequired({ emptyAccepts: true }))).toBeNull();
+    expect(
+      extractChallengeFromPaymentRequired(buildPaymentRequired({ emptyAccepts: true }))
+    ).toBeNull();
   });
 });
 
@@ -168,6 +175,7 @@ describe("fetchWithQuoteBoundPayment / runPaidQuery quote binding", () => {
     process.env.API_BASE_URL = "http://localhost:3001";
     process.env.STELLAR_NETWORK = NETWORK;
     process.env.X402_ASSET = ASSET;
+    process.env.X402_MAX_PRICE_USD = "1";
     vi.resetModules();
 
     const { runPaidQuery: run } = await import("./client.js");

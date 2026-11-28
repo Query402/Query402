@@ -185,7 +185,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
       setPaymentEvidence(req, buildDemoPaymentEvidence(req));
     } catch (error) {
       return next(error);
-  }
+    }
     return next();
   }
 

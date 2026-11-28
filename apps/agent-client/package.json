@@ -11,6 +11,7 @@
   "scripts": {
     "prebuild": "npm --prefix ../../packages/shared run build",
     "pretypecheck": "npm --prefix ../../packages/shared run build",
+    "pretest": "npm --prefix ../../packages/shared run build",
     "dev": "tsx src/cli.ts",
     "cli": "tsx src/cli.ts",
     "demo": "tsx src/demo.ts",

@@ -14,6 +14,7 @@ import { config } from "../lib/config.js";
 import {
   checkAndReserveBudget,
   commitBudget,
+  getRetryAfterSeconds,
   releaseBudget,
   SponsorshipBudgetExceededError,
   SponsorshipNonceReplayError
@@ -30,6 +31,7 @@ const paidRunSchema = z
     query: z.string().optional(),
     url: z.string().url().optional()
   })
+  .strict()
   .superRefine((data, context) => {
     if (data.mode === "scrape") {
       if (!data.url) {
@@ -79,6 +81,11 @@ function parseSignedGrantHeader(value: string | undefined): SignedGrant | null {
 }
 
 function policyErrorResponse(res: Response, policy: ReturnType<typeof authorizeSponsoredRun>) {
+  if (policy.statusCode === 429) {
+    const retryAfter = getRetryAfterSeconds();
+    res.set("Retry-After", String(retryAfter));
+  }
+
   return res.status(policy.statusCode).json({
     error: policy.error,
     decision: policy.decision,
@@ -162,6 +169,8 @@ paidRouter.post("/api/paid/run", async (req, res, next) => {
       }
 
       if (error instanceof SponsorshipBudgetExceededError) {
+        const retryAfter = getRetryAfterSeconds();
+        res.set("Retry-After", String(retryAfter));
         return res.status(429).json({
           error: `${error.scope}_budget_exceeded`,
           grantId: grant.grantId
