@@ -1,0 +1,32 @@
+{
+  "description": "Analytics rows with ordinary values, including fields that need RFC 4180 quoting.",
+  "rows": [
+    {
+      "id": "use_csv_benign_1",
+      "mode": "search",
+      "endpoint": "/x402/search",
+      "providerId": "search.basic",
+      "queryOrUrl": "latest stellar x402 updates",
+      "priceUsd": 0.01,
+      "network": "stellar:testnet",
+      "paymentStatus": "settled",
+      "payerPublicKey": "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWHF",
+      "traceId": "trace_benign_1",
+      "createdAt": "2026-06-21T10:00:00.000Z",
+      "latencyMs": 150
+    },
+    {
+      "id": "use_csv_benign_2",
+      "mode": "scrape",
+      "endpoint": "/x402/scrape?q=hello,world",
+      "providerId": "scrape.page",
+      "queryOrUrl": "https://example.com",
+      "priceUsd": 0.03,
+      "network": "stellar:testnet",
+      "paymentStatus": "demo-paid",
+      "traceId": "trace \"benign\"",
+      "createdAt": "2026-06-21T12:00:00.000Z",
+      "latencyMs": 900
+    }
+  ]
+}

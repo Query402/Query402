@@ -41,17 +41,17 @@ interface PrivacySafeAnalyticsResponse {
     verified: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
     settled: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
     failed: {
       totalCount: number;
       totalVolumeUsd: number;
-      byCategory: { /* same as demoPaid */ };
+      byCategory: {/* same as demoPaid */};
     };
   };
   recentRecords: Array<{
@@ -136,6 +136,20 @@ curl "http://localhost:3001/api/v1/analytics?limit=10"
   }
 }
 ```
+
+## Analytics CSV Export
+
+### GET `/api/analytics/export.csv`
+
+Downloads a page of usage records as an RFC 4180 CSV attachment.
+
+**Query Parameters:**
+
+- `limit` (optional): Number of rows to export (1-500, default: 500)
+
+Columns: `id`, `mode`, `endpoint`, `providerId`, `priceUsd`, `paymentStatus`, `createdAt`, `latencyMs`, `traceId`, `payerHash`.
+
+Every user- or provider-derived cell passes through a spreadsheet formula guard: values that begin with `=`, `+`, `-` or `@` after optional leading whitespace are prefixed with an apostrophe so spreadsheet apps treat them as text. Typed numeric columns keep their numeric value, and commas, quotes and line breaks are quoted per RFC 4180. Query text and raw payer keys are never included.
 
 ## Detailed Analytics Endpoint (Protected)
 

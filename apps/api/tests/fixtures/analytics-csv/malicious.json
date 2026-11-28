@@ -1,0 +1,32 @@
+{
+  "description": "Analytics rows whose user- or provider-derived fields begin with spreadsheet formula triggers.",
+  "rows": [
+    {
+      "id": "use_csv_malicious_1",
+      "mode": "search",
+      "endpoint": "=HYPERLINK(\"https://attacker.example\",\"click\")",
+      "providerId": "+1+1",
+      "queryOrUrl": "=cmd|' /C calc'!A0",
+      "priceUsd": 0.01,
+      "network": "stellar:testnet",
+      "paymentStatus": "settled",
+      "payerPublicKey": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      "traceId": "-2+3",
+      "createdAt": "2026-06-21T10:00:00.000Z",
+      "latencyMs": 120
+    },
+    {
+      "id": "use_csv_malicious_2",
+      "mode": "news",
+      "endpoint": "  @SUM(A1:A2)",
+      "providerId": "news.fast",
+      "queryOrUrl": "\t=1+1",
+      "priceUsd": 0.02,
+      "network": "stellar:testnet",
+      "paymentStatus": "demo-paid",
+      "traceId": "\t=1+1",
+      "createdAt": "2026-06-21T11:00:00.000Z",
+      "latencyMs": 80
+    }
+  ]
+}

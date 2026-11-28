@@ -52,6 +52,7 @@ ANALYTICS_DB_PATH=data/analytics.db
 4. Dashboard widgets read from:
    - `GET /api/usage` — optional `?limit=` and `?offset=` (max 500 rows per export; returns HTTP 400 `over_limit_export_size` if exceeded)
    - `GET /api/analytics` — optional `?recentUsageLimit=` and `?recentPaymentLimit=` (max 500 rows per query; returns HTTP 400 `over_limit_export_size` if exceeded)
+   - `GET /api/analytics/export.csv` — optional `?limit=` (max 500 rows); returns a CSV attachment whose user- and provider-derived cells are guarded against spreadsheet formula injection
 
 ### Migrating from legacy `db.json`
 
