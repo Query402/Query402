@@ -22,6 +22,7 @@ import {
   ZeroPriceError
 } from "./pricing.js";
 import { config, requirePayToAddress } from "./config.js";
+import { registerFacilitatorResponseLimit } from "./bounded-facilitator-client.js";
 import { buildPaymentDebugMetadata } from "./payment-debug.js";
 import { redactSensitiveObject } from "./redact-headers.js";
 import {
@@ -185,7 +186,7 @@ function demoMode402Middleware(req: Request, res: Response, next: NextFunction) 
       setPaymentEvidence(req, buildDemoPaymentEvidence(req));
     } catch (error) {
       return next(error);
-  }
+    }
     return next();
   }
 
@@ -331,6 +332,7 @@ export function createX402Middleware() {
         }
       : undefined;
 
+  registerFacilitatorResponseLimit(config.X402_FACILITATOR_URL);
   const facilitatorClient = new HTTPFacilitatorClient({
     url: config.X402_FACILITATOR_URL,
     createAuthHeaders

@@ -164,7 +164,9 @@ export default function ControlDeckPage() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const budgetGateRef = useRef(new BudgetGate());
-  const [budgetGateDecision, setBudgetGateDecision] = useState(() => budgetGateRef.current.decision);
+  const [budgetGateDecision, setBudgetGateDecision] = useState(
+    () => budgetGateRef.current.decision
+  );
 
   const modeProviders = useMemo(
     () => providers.filter((provider) => provider.category === mode && provider.enabled),
@@ -431,9 +433,10 @@ export default function ControlDeckPage() {
           return;
         }
         setPreview(null);
-        const reason = err instanceof Error && err.name !== "AbortError"
-          ? err.message
-          : "Grant preview unavailable";
+        const reason =
+          err instanceof Error && err.name !== "AbortError"
+            ? err.message
+            : "Grant preview unavailable";
         setPreviewError(reason);
         budgetGateRef.current.applyError(requestId, reason);
         setBudgetGateDecision(budgetGateRef.current.decision);
@@ -793,7 +796,9 @@ export default function ControlDeckPage() {
               {isLoading || walletState.status === "signing" ? "Executing..." : "Run paid query"}
               <TerminalSquare size={16} />
             </button>
-            {paymentMode === "sponsored" && !budgetGateDecision.allowed && budgetGateDecision.reason ? (
+            {paymentMode === "sponsored" &&
+            !budgetGateDecision.allowed &&
+            budgetGateDecision.reason ? (
               <p className="error-box" data-testid="budget-gate-reason">
                 {budgetGateDecision.reason}
               </p>

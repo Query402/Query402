@@ -59,6 +59,7 @@ export async function executeQuery(
     provider: string;
     q?: string;
     url?: string;
+    paymentReference?: string;
   },
   options?: { facilitatorResult: FacilitatorPaymentResult | null }
 ): Promise<QueryResult> {

@@ -14,7 +14,11 @@ export interface PaymentProof {
   amount: string;
 }
 
-export function queryCoverageDigest(input: { provider: string; target: string; price: string }): string {
+export function queryCoverageDigest(input: {
+  provider: string;
+  target: string;
+  price: string;
+}): string {
   return createHash("sha256")
     .update(`${input.provider}\n${input.target}\n${input.price}`)
     .digest("hex");

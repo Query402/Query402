@@ -8,9 +8,7 @@ const DEFAULT_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 export function parseNpmVersion(versionString) {
   const normalized = String(versionString ?? "").trim();
-  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(
-    normalized
-  );
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(normalized);
   if (!match) {
     throw new Error(`Invalid npm version "${versionString}". Expected exact semver (X.Y.Z).`);
   }
@@ -24,7 +22,7 @@ export function parseNpmVersion(versionString) {
 
 export function parsePackageManagerField(packageManager) {
   if (typeof packageManager !== "string" || packageManager.trim().length === 0) {
-    throw new Error("Root package.json must declare a \"packageManager\" field.");
+    throw new Error('Root package.json must declare a "packageManager" field.');
   }
   const match = /^npm@(\d+\.\d+\.\d+)$/.exec(packageManager.trim());
   if (!match) {
@@ -35,16 +33,14 @@ export function parsePackageManagerField(packageManager) {
 
 export function assertCompatibleEnginesNpm(enginesNpm, expectedMajor) {
   if (typeof enginesNpm !== "string" || enginesNpm.trim().length === 0) {
-    throw new Error("Root package.json must declare an \"engines.npm\" range.");
+    throw new Error('Root package.json must declare an "engines.npm" range.');
   }
   const trimmed = enginesNpm.trim();
   const expectedRange = `>=${expectedMajor}.0.0 <${expectedMajor + 1}.0.0`;
   const caretRange = `^${expectedMajor}.`;
 
   if (trimmed !== expectedRange && !trimmed.startsWith(caretRange)) {
-    throw new Error(
-      `Incompatible engines.npm "${enginesNpm}". Expected "${expectedRange}".`
-    );
+    throw new Error(`Incompatible engines.npm "${enginesNpm}". Expected "${expectedRange}".`);
   }
 }
 
