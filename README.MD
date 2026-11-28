@@ -232,6 +232,10 @@ Scrape:
 npm run cli -- scrape "https://developers.stellar.org" --provider scrape.page
 ```
 
+### Provider catalog validation
+
+Before building a payment quote the agent client fetches `/api/providers` and treats the response as untrusted. The body is capped at 512 KiB (rejected via `Content-Length` or while streaming), parsed with a strict shared schema, and must contain unique provider IDs with finite, positive, safe USD prices. Any failure raises a stable `CatalogResponseError` and the client never signs a payment.
+
 ### Structured receipts
 
 Pass `--receipt` when a script or log needs a machine-readable result instead of the human-readable summary. `--json` is an alias for the same output. Both flags print a JSON object containing only public receipt fields: `command`, `provider`, the (possibly shortened) `input`, `price`, and `traceId`. Inputs longer than 50 characters are automatically shortened to 47 characters plus `...`; payment headers, wallet keys, and the raw response are not included.

@@ -6,6 +6,7 @@ import { ExactStellarScheme } from "@x402/stellar/exact/client";
 import { buildPaymentProofLinks } from "@query402/shared";
 import type { PaymentProofLinks } from "@query402/shared";
 import { nanoid } from "nanoid";
+import { parseProviderCatalog, readCatalogText } from "./catalog.js";
 import { validateChallengeAgainstConfig, type ChallengeMismatch } from "./challenge.js";
 import { config } from "./config.js";
 import { buildPaidClientRequestKey, getIdempotencyKey } from "./idempotency.js";
@@ -161,10 +162,8 @@ async function resolveQuoteFromCatalog(
   if (!response.ok) {
     throw new Error(`Unable to load provider catalog (status ${response.status})`);
   }
-  const body = (await response.json()) as {
-    providers?: Array<{ id: string; priceUsd: number; enabled?: boolean }>;
-  };
-  const match = body.providers?.find((p) => p.id === provider && p.enabled !== false);
+  const catalog = parseProviderCatalog(await readCatalogText(response));
+  const match = catalog.providers.find((p) => p.id === provider && p.enabled !== false);
   if (!match) {
     throw new Error(`Provider "${provider}" was not found in the catalog`);
   }

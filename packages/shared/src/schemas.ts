@@ -275,6 +275,44 @@ export const quoteBindErrorCodeSchema = z.enum([
   "challenge_empty"
 ]);
 
+// --- Agent client provider catalog schemas ---------------------------------
+//
+// The agent client reads /api/providers before building a payment quote and
+// must not trust the response shape. Prices are USD amounts that get converted
+// to 7-decimal token units, so a price is only accepted when the converted
+// amount stays inside the safe integer range. Unknown keys are stripped rather
+// than rejected so the API may keep enriching provider records.
+
+export const CATALOG_TOKEN_UNITS_PER_USD = 10_000_000;
+
+/** Largest USD price whose 7-decimal token amount is still a safe integer. */
+export const MAX_CATALOG_PRICE_USD = Number.MAX_SAFE_INTEGER / CATALOG_TOKEN_UNITS_PER_USD;
+
+export const providerCatalogEntrySchema = z.object({
+  id: z.string().min(1),
+  priceUsd: z.number().finite().positive().max(MAX_CATALOG_PRICE_USD),
+  enabled: z.boolean().optional()
+});
+
+export const providerCatalogResponseSchema = z.object({
+  providers: z.array(providerCatalogEntrySchema).superRefine((providers, ctx) => {
+    const seen = new Set<string>();
+    providers.forEach((provider, index) => {
+      if (seen.has(provider.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Duplicate provider id in catalog",
+          path: [index, "id"]
+        });
+      }
+      seen.add(provider.id);
+    });
+  })
+});
+
+export type ProviderCatalogEntry = z.infer<typeof providerCatalogEntrySchema>;
+export type ProviderCatalogResponse = z.infer<typeof providerCatalogResponseSchema>;
+
 export type RequestedQuote = z.infer<typeof requestedQuoteSchema>;
 export type PaymentChallenge = z.infer<typeof paymentChallengeSchema>;
 export type QuoteBindErrorCode = z.infer<typeof quoteBindErrorCodeSchema>;
