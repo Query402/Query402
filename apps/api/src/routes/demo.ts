@@ -1,4 +1,4 @@
-import { Router, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { signedGrantSchema, type QueryResult, type SignedGrant } from "@query402/shared";
 import { z } from "zod";
 import { runPaidRequest } from "../lib/demo-client.js";
@@ -93,6 +93,27 @@ paidRouter.use((_req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
 });
+
+// Reject non-JSON request bodies (e.g. form or text) before payment and
+// provider validation runs. An optional charset parameter is accepted.
+function isJsonContentType(contentType: string) {
+  const mediaType = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  return mediaType === "application/json";
+}
+
+function requireJsonContentType(req: Request, res: Response, next: NextFunction) {
+  const contentType = req.get("content-type");
+  if (contentType && !isJsonContentType(contentType)) {
+    return res.status(415).json({
+      error: "Unsupported media type",
+      type: "unsupported_media_type",
+      errorCode: "unsupported_media_type"
+    });
+  }
+  next();
+}
+
+paidRouter.use(requireJsonContentType);
 
 paidRouter.post("/api/paid/run", async (req, res, next) => {
   try {

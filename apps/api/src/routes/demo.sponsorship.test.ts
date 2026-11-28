@@ -312,3 +312,85 @@ describe("POST /api/paid/run sponsorship", () => {
     expect(runPaidRequestMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("POST /api/paid/run content-type validation", () => {
+  async function createContentTypeApp() {
+    const { paidRouter } = await import("../routes/demo.js");
+    const app = express();
+    app.use(express.json());
+    app.use(paidRouter);
+    return app;
+  }
+
+  const paidRunBody = {
+    mode: "search",
+    provider: "search.basic",
+    wallet: TEST_WALLET,
+    query: "test query"
+  };
+
+  async function postWithContentType(
+    app: express.Express,
+    contentType: string,
+    body: string | object | undefined = paidRunBody
+  ) {
+    return request(app).post("/api/paid/run").set("content-type", contentType).send(body);
+  }
+
+  it("accepts application/json and proceeds past content-type validation", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(app, "application/json");
+
+    expect(response.status).not.toBe(415);
+    expect(response.body?.errorCode).not.toBe("unsupported_media_type");
+  });
+
+  it("accepts application/json with an optional charset parameter", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(app, "application/json; charset=utf-8");
+
+    expect(response.status).not.toBe(415);
+    expect(response.body?.errorCode).not.toBe("unsupported_media_type");
+  });
+
+  it("accepts application/json with an uppercase charset parameter", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(app, "APPLICATION/JSON; CHARSET=UTF-8");
+
+    expect(response.status).not.toBe(415);
+    expect(response.body?.errorCode).not.toBe("unsupported_media_type");
+  });
+
+  it("rejects application/x-www-form-urlencoded with a stable 415 JSON error", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(
+      app,
+      "application/x-www-form-urlencoded",
+      "query=test"
+    );
+
+    expect(response.status).toBe(415);
+    expect(response.body.error).toBe("Unsupported media type");
+    expect(response.body.type).toBe("unsupported_media_type");
+    expect(response.body.errorCode).toBe("unsupported_media_type");
+    expect(response.headers["content-type"]).toMatch(/application\/json/);
+  });
+
+  it("rejects text/plain with a stable 415 JSON error", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(app, "text/plain", "raw text body");
+
+    expect(response.status).toBe(415);
+    expect(response.body.errorCode).toBe("unsupported_media_type");
+    expect(response.body.type).toBe("unsupported_media_type");
+  });
+
+  it("rejects text/html with a stable 415 JSON error", async () => {
+    const app = await createContentTypeApp();
+    const response = await postWithContentType(app, "text/html", "<html></html>");
+
+    expect(response.status).toBe(415);
+    expect(response.body.errorCode).toBe("unsupported_media_type");
+    expect(response.body.type).toBe("unsupported_media_type");
+  });
+});
