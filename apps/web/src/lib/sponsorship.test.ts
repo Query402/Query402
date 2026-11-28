@@ -219,38 +219,13 @@ function sponsoredResponse() {
   };
 }
 
-import { registerHooks } from "node:module";
 import type { SponsorshipPreview } from "@query402/shared";
 
-// Stub @stellar/freighter-api (browser-only) and import.meta.env (Vite-only)
-// so sponsorship.ts can be imported in the Node test runner.
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier === "@stellar/freighter-api") {
-      return {
-        url: "data:text/javascript,export const signMessage = async () => ({ error: new Error('stub') });",
-        shortCircuit: true,
-      };
-    }
-    return nextResolve(specifier, context);
-  },
-  load(url, context, nextLoad) {
-    const result = nextLoad(url, context);
-    if (result.source && result.source.includes("import.meta.env")) {
-      const source =
-        typeof result.source === "string"
-          ? result.source
-          : Buffer.from(result.source).toString("utf8");
-      if (source.includes("import.meta.env")) {
-        result.source = source.replaceAll(
-          /import\.meta\.env(\.\w+)?/g,
-          '({ VITE_API_BASE_URL: "http://localhost:3001" })'
-        );
-      }
-    }
-    return result;
-  }
-});
+// No `node:module` loader hooks here: `module.registerHooks` only exists on
+// Node 22.15+, and none is needed. sponsorship.ts resolves the Freighter
+// bridge lazily, so importing it in Node never touches the extension (the
+// tests inject the signer through the seam above), and the Vite-only
+// `import.meta.env` reads in src/lib are optional-chained.
 
 type BudgetGateModule = typeof import("./sponsorship.js");
 

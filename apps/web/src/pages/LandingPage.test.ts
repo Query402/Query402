@@ -1,31 +1,14 @@
 import { test, describe, before } from "node:test";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
-import { registerHooks } from "node:module";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 
-// The landing page (via src/lib/api.ts) reads import.meta.env.VITE_API_BASE_URL,
-// which is undefined under the Node test runner. Stub it before importing the page.
-registerHooks({
-  load(url, context, nextLoad) {
-    const result = nextLoad(url, context);
-    if (result.source && result.source.includes("import.meta.env")) {
-      const source =
-        typeof result.source === "string"
-          ? result.source
-          : Buffer.from(result.source).toString("utf8");
-      if (source.includes("import.meta.env")) {
-        result.source = source.replaceAll(
-          /import\.meta\.env(\.\w+)?/g,
-          '({ VITE_API_BASE_URL: "http://localhost:3001" })'
-        );
-      }
-    }
-    return result;
-  }
-});
+// No `node:module` loader hooks here: `module.registerHooks` only exists on
+// Node 22.15+, and none is needed. The page's Vite-only env read goes through
+// src/lib/api.ts, which optional-chains `import.meta.env`, so it imports
+// cleanly under the Node test runner.
 
 const landingSource = readFileSync(
   new URL("./LandingPage.tsx", import.meta.url),
