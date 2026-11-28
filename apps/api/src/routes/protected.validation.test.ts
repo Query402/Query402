@@ -13,9 +13,14 @@ vi.mock("../services/query-service.js", async (importOriginal) => {
   };
 });
 
+const { getDetailedAnalyticsDataMock } = vi.hoisted(() => ({
+  getDetailedAnalyticsDataMock: vi.fn()
+}));
+
 vi.mock("../lib/persistence.js", () => ({
   persistPaymentAndUsage: vi.fn().mockResolvedValue(undefined),
-  savePaymentAttempt: vi.fn().mockResolvedValue(undefined)
+  savePaymentAttempt: vi.fn().mockResolvedValue(undefined),
+  getDetailedAnalyticsData: (...args: unknown[]) => getDetailedAnalyticsDataMock(...args)
 }));
 
 vi.mock("../lib/idempotency/service.js", () => ({
@@ -129,6 +134,92 @@ describe("protected route validation and error handling", () => {
     expect(missingUrl.body.errorCode).toBe("invalid_query");
     expect(invalidUrl.status).toBe(400);
     expect(invalidUrl.body.errorCode).toBe("invalid_query");
+  });
+
+  describe("GET /x402/analytics/detailed query validation", () => {
+    const successShape = {
+      aggregation: { totalQueries: 0 },
+      records: [],
+      pagination: { limit: 20, hasMore: false, nextCursor: null }
+    };
+
+    beforeEach(() => {
+      getDetailedAnalyticsDataMock.mockReset();
+      getDetailedAnalyticsDataMock.mockReturnValue(successShape);
+    });
+
+    it("accepts omitted limit and boundary values 1 and 100", async () => {
+      const app = await createValidationApp();
+
+      const omitted = await request(app).get("/x402/analytics/detailed");
+      const one = await request(app).get("/x402/analytics/detailed").query({ limit: "1" });
+      const hundred = await request(app).get("/x402/analytics/detailed").query({ limit: "100" });
+      const mid = await request(app).get("/x402/analytics/detailed").query({ limit: "50" });
+
+      expect(omitted.status).toBe(200);
+      expect(omitted.body).toEqual(successShape);
+      expect(one.status).toBe(200);
+      expect(hundred.status).toBe(200);
+      expect(mid.status).toBe(200);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledWith(undefined, undefined);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledWith(undefined, 1);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledWith(undefined, 100);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledWith(undefined, 50);
+    });
+
+    it("rejects decimal, exponent, signed, whitespace, trailing, and out-of-range limits", async () => {
+      const app = await createValidationApp();
+      const malformed = ["10.5", "1e2", "+10", "-5", " 10", "10 ", "10junk", "010", "0", "101", ""];
+
+      for (const limit of malformed) {
+        const response = await request(app).get("/x402/analytics/detailed").query({ limit });
+        expect(response.status, `limit=${JSON.stringify(limit)}`).toBe(400);
+        expect(response.body.error).toBe("Invalid limit parameter");
+        expect(response.body.message).toBe("limit must be a number between 1 and 100");
+      }
+
+      expect(getDetailedAnalyticsDataMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects repeated limit and cursor query parameters", async () => {
+      const app = await createValidationApp();
+
+      const repeatedLimit = await request(app).get(
+        "/x402/analytics/detailed?limit=10&limit=20"
+      );
+      const repeatedCursor = await request(app).get(
+        "/x402/analytics/detailed?cursor=abc&cursor=def"
+      );
+
+      expect(repeatedLimit.status).toBe(400);
+      expect(repeatedLimit.body.error).toBe("Invalid limit parameter");
+      expect(repeatedCursor.status).toBe(400);
+      expect(repeatedCursor.body.error).toBe("Invalid cursor parameter");
+      expect(getDetailedAnalyticsDataMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid cursors and accepts a valid cursor", async () => {
+      const { encodeCursor } = await import("../lib/analytics-privacy.js");
+      const app = await createValidationApp();
+      const validCursor = encodeCursor({
+        timestamp: "2026-01-01T00:00:00.000Z",
+        id: "evt_1"
+      });
+
+      const invalid = await request(app)
+        .get("/x402/analytics/detailed")
+        .query({ cursor: "not-a-valid-cursor" });
+      const valid = await request(app)
+        .get("/x402/analytics/detailed")
+        .query({ cursor: validCursor, limit: "10" });
+
+      expect(invalid.status).toBe(400);
+      expect(invalid.body.error).toBe("Invalid cursor parameter");
+      expect(valid.status).toBe(200);
+      expect(valid.body).toEqual(successShape);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledTimes(1);
+      expect(getDetailedAnalyticsDataMock).toHaveBeenCalledWith(validCursor, 10);
+    });
   });
 
   it("handles provider timeout and returns provider_timeout", async () => {

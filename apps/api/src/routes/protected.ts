@@ -1,13 +1,33 @@
 import { Router } from "express";
+import { z } from "zod";
 import { searchQuerySchema, newsQuerySchema, scrapeQuerySchema } from "@query402/shared";
 import { executeQuery } from "../services/query-service.js";
 import { handlePaidX402Route } from "../lib/idempotency/x402.js";
 import { config } from "../lib/config.js";
 import { savePaymentAttempt, saveUsageEvent, getDetailedAnalyticsData } from "../lib/persistence.js";
 import { getPaymentEvidence } from "../lib/payment-evidence.js";
-import { handlePaidX402Route } from "../lib/idempotency/x402.js";
+import { decodeCursor } from "../lib/analytics-privacy.js";
 
 export const protectedRouter = Router();
+
+/** Canonical integer string 1–100 (no signs, decimals, exponents, whitespace, or leading zeros). */
+const detailedAnalyticsLimitSchema = z
+  .string()
+  .regex(/^(?:[1-9][0-9]?|100)$/, "limit must be a canonical integer between 1 and 100")
+  .transform((value) => Number.parseInt(value, 10));
+
+const detailedAnalyticsCursorSchema = z
+  .string()
+  .refine((value) => decodeCursor(value) !== null, { message: "Invalid cursor" });
+
+/**
+ * Strict query schema for /x402/analytics/detailed.
+ * Rejects repeated params (Express arrays), malformed limits, and undecodable cursors.
+ */
+export const detailedAnalyticsQuerySchema = z.object({
+  cursor: detailedAnalyticsCursorSchema.optional(),
+  limit: detailedAnalyticsLimitSchema.optional()
+});
 
 // Prevent browsers and proxies from caching sensitive payment evidence.
 protectedRouter.use((_req, res, next) => {
@@ -101,20 +121,31 @@ protectedRouter.get("/x402/scrape", async (req, res, next) => {
  * Includes transaction hashes and payer key hashes (but never full addresses)
  * GET /x402/analytics/detailed?cursor=<cursor>&limit=<limit>
  */
-protectedRouter.get("/x402/analytics/detailed", (_req, res, next) => {
+protectedRouter.get("/x402/analytics/detailed", (req, res, next) => {
   try {
-    const cursor = typeof _req.query.cursor === "string" ? _req.query.cursor : undefined;
-    const limit = typeof _req.query.limit === "string" ? parseInt(_req.query.limit, 10) : undefined;
-
-    // Validate limit
-    if (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100)) {
+    const parsed = detailedAnalyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const path = issue?.path?.[0];
+      if (path === "limit") {
+        return res.status(400).json({
+          error: "Invalid limit parameter",
+          message: "limit must be a number between 1 and 100"
+        });
+      }
+      if (path === "cursor") {
+        return res.status(400).json({
+          error: "Invalid cursor parameter",
+          message: issue?.message ?? "Invalid cursor"
+        });
+      }
       return res.status(400).json({
-        error: "Invalid limit parameter",
-        message: "limit must be a number between 1 and 100"
+        error: "Invalid analytics request",
+        message: issue?.message ?? "Invalid query parameters"
       });
     }
 
-    const analytics = getDetailedAnalyticsData(cursor, limit);
+    const analytics = getDetailedAnalyticsData(parsed.data.cursor, parsed.data.limit);
     res.json(analytics);
   } catch (error: any) {
     res.status(400).json({
