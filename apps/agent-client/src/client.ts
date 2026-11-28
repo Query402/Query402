@@ -30,6 +30,26 @@ export class ChallengeMismatchError extends Error {
 }
 
 /**
+ * Typed refusal when a payment-bearing retry receives a 3xx response.
+ * Never includes Location or payment header values.
+ */
+export class PaidRedirectError extends Error {
+  readonly name = "PaidRedirectError";
+  readonly status: number;
+
+  constructor(status: number) {
+    super(
+      `Payment-bearing request received HTTP ${status} redirect and was refused; redirects are not followed after payment headers are attached.`
+    );
+    this.status = status;
+  }
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status >= 300 && status < 400;
+}
+
+/**
  * Fetch the 402 challenge and compare it to the CLI's own configuration
  * BEFORE any signing happens. Throws ChallengeMismatchError when the
  * server's provider/network/asset/amount disagrees with the config; the
@@ -220,10 +240,18 @@ export async function fetchWithQuoteBoundPayment(
     headers.set(key, value);
   }
 
-  return fetchFn(endpoint, {
+  // Fail closed: never follow redirects once payment material is attached.
+  const paidResponse = await fetchFn(endpoint, {
     ...init,
-    headers
+    headers,
+    redirect: "manual"
   });
+
+  if (isRedirectStatus(paidResponse.status)) {
+    throw new PaidRedirectError(paidResponse.status);
+  }
+
+  return paidResponse;
 }
 
 export async function runPaidQuery(
@@ -328,7 +356,7 @@ export async function runPaidQuery(
           );
         })();
   } catch (error) {
-    if (error instanceof QuoteBindError) {
+    if (error instanceof QuoteBindError || error instanceof PaidRedirectError) {
       throw error;
     }
     if (isNetworkFailure(error)) {

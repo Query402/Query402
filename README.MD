@@ -88,7 +88,7 @@ Copy `.env.example` to `.env` and fill values:
 - `PORT_API`
 - `API_BASE_URL`
 - `VITE_API_BASE_URL`
-- `CORS_ORIGINS` (comma-separated allowed origins for API in production)
+- `CORS_ORIGINS` (comma-separated allowed origins for API in production; limited to 100 unique normalized origins and 8,192 UTF-8 bytes total. The API fails startup if either limit is exceeded.)
 - `DEMO_MODE` (`true` for deterministic demo reliability)
 - Optional keys: `BRAVE_API_KEY`, `SERPAPI_API_KEY`, `NEWS_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`
 

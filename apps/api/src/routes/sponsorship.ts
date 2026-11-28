@@ -13,6 +13,7 @@ import {
 import { previewSponsoredRun } from "../lib/sponsorship/policy.js";
 import { isIdempotencyStorageAvailable } from "../lib/idempotency/service.js";
 import { createChallengeRateLimit } from "../lib/challenge-rate-limit.js";
+import { requireJsonContentType } from "../lib/require-json-content-type.js";
 
 const challengeRequestSchema = z.object({
   wallet: stellarPublicKeySchema
@@ -31,14 +32,18 @@ const previewRequestSchema = z.object({
 });
 
 export const sponsorshipRouter = Router();
-
 // Prevent browsers and proxies from caching short-lived sponsorship data
 // (challenges, grants, previews, denials, and rate-limited responses).
 sponsorshipRouter.use((_req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
 });
-
+// Declared-JSON check, registered ahead of every POST route below: a body sent as text, a
+// form or with no media type is refused with 415 before it is validated, signed or stored.
+sponsorshipRouter.post(
+  ["/api/sponsorship/challenge", "/api/sponsorship/grants", "/api/sponsorship/preview"],
+  requireJsonContentType()
+);
 const sponsorshipChallengeRateLimit = createChallengeRateLimit({
   limit: config.CHALLENGE_RATE_LIMIT_PER_MINUTE,
   maxClients: config.CHALLENGE_RATE_LIMIT_MAX_CLIENTS

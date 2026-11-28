@@ -203,6 +203,34 @@ describe("public routes", () => {
     expect(catalogResponse.body.byCategory.scrape.length).toBeGreaterThan(0);
   });
 
+  describe("Cache-Control: no-store on price-bearing catalog endpoints", () => {
+    const priceBearingRoutes = ["/api/providers", "/api/catalog", "/api/matrix"] as const;
+
+    for (const route of priceBearingRoutes) {
+      it(`GET ${route} includes Cache-Control: no-store`, async () => {
+        const app = await createPublicApp();
+        const response = await request(app).get(route);
+
+        expect(response.status).toBe(200);
+        expect(
+          response.headers["cache-control"],
+          `route=${route} missing Cache-Control: no-store header`
+        ).toBe("no-store");
+      });
+    }
+
+    it("other public endpoints keep default cache behavior", async () => {
+      const app = await createPublicApp();
+      const healthResponse = await request(app).get("/health");
+      const scenariosResponse = await request(app).get("/api/scenarios");
+
+      expect(healthResponse.status).toBe(200);
+      expect(healthResponse.headers["cache-control"]).not.toBe("no-store");
+      expect(scenariosResponse.status).toBe(200);
+      expect(scenariosResponse.headers["cache-control"]).not.toBe("no-store");
+    });
+  });
+
   describe("paid query fixture", () => {
     it("analytics reflects settled paid query from fixture", async () => {
       const { persistPaymentAndUsage } = await import("../lib/persistence.js");
@@ -489,6 +517,61 @@ describe("public routes", () => {
         limit: 2,
         offset: 1,
         count: 2
+      });
+    });
+  });
+
+  describe("analytics CSV export (#333)", () => {
+    it("neutralizes spreadsheet formulas and preserves benign values", async () => {
+      const app = await createPublicApp();
+      const { persistPaymentAndUsage } = await import("../lib/persistence.js");
+      const { buildTestPaymentAttempt, buildTestUsageEvent } =
+        await import("../test/storage-test-helpers.js");
+
+      await persistPaymentAndUsage({
+        payment: buildTestPaymentAttempt({ id: "pay_csv_malicious" }),
+        usage: buildTestUsageEvent({
+          id: "use_csv_malicious",
+          providerId: "+1+1",
+          endpoint: "  @SUM(A1:A2)",
+          traceId: "=cmd|' /C calc'!A0",
+          queryOrUrl: '=HYPERLINK("https://attacker.example")'
+        })
+      });
+      await persistPaymentAndUsage({
+        payment: buildTestPaymentAttempt({ id: "pay_csv_benign" }),
+        usage: buildTestUsageEvent({
+          id: "use_csv_benign",
+          providerId: "search.basic",
+          endpoint: "/x402/search",
+          traceId: "trace_benign"
+        })
+      });
+
+      const response = await request(app).get("/api/analytics/export.csv?limit=10");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toContain("text/csv");
+      expect(response.headers["content-disposition"]).toContain("query402-analytics.csv");
+      expect(response.headers["cache-control"]).toBe("no-store");
+
+      expect(response.text).toContain("'+1+1");
+      expect(response.text).toContain("'  @SUM(A1:A2)");
+      expect(response.text).toContain("'=cmd|' /C calc'!A0");
+      expect(response.text).toContain("search.basic");
+      expect(response.text).toContain("trace_benign");
+      expect(response.text).not.toContain("HYPERLINK");
+    });
+
+    it("keeps the export row limit bounded", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/analytics/export.csv?limit=501");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "over_limit_export_size",
+        message: "Export row limit exceeds maximum allowed size of 500",
+        max: 500
       });
     });
   });
