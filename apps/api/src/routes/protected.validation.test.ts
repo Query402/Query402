@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MAX_PROVIDER_ID_LENGTH, MAX_QUERY_LENGTH, MAX_SCRAPE_URL_LENGTH } from "@query402/shared";
 import { applyApiTestEnv, resetApiTestStorage, TEST_WALLET } from "../test/api-test-helpers.js";
 
 const executeQueryMock = vi.fn();
@@ -129,6 +130,54 @@ describe("protected route validation and error handling", () => {
     expect(missingUrl.body.errorCode).toBe("invalid_query");
     expect(invalidUrl.status).toBe(400);
     expect(invalidUrl.body.errorCode).toBe("invalid_query");
+  });
+
+  it("enforces boundary lengths on /x402/search, /x402/news, and /x402/scrape before provider execution", async () => {
+    const app = await createValidationApp();
+    const overLimitProvider = "p".repeat(MAX_PROVIDER_ID_LENGTH + 1);
+    const atLimitQuery = "q".repeat(MAX_QUERY_LENGTH);
+    const overLimitQuery = "q".repeat(MAX_QUERY_LENGTH + 1);
+    const urlPrefix = "https://example.com/";
+    const atLimitUrl = urlPrefix + "u".repeat(MAX_SCRAPE_URL_LENGTH - urlPrefix.length);
+    const overLimitUrl = urlPrefix + "u".repeat(MAX_SCRAPE_URL_LENGTH - urlPrefix.length + 1);
+
+    mockQueryResult("search", "search.basic", 0.01);
+    const searchAtLimit = await request(app)
+      .get("/x402/search")
+      .query({ provider: "search.basic", q: atLimitQuery });
+    expect(searchAtLimit.status).toBe(200);
+
+    mockQueryResult("news", "news.fast", 0.015);
+    const newsAtLimit = await request(app)
+      .get("/x402/news")
+      .query({ provider: "news.fast", q: atLimitQuery });
+    expect(newsAtLimit.status).toBe(200);
+
+    mockQueryResult("scrape", "scrape.page", 0.02);
+    const scrapeAtLimit = await request(app)
+      .get("/x402/scrape")
+      .query({ provider: "scrape.page", url: atLimitUrl });
+    expect(scrapeAtLimit.status).toBe(200);
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(3);
+    executeQueryMock.mockClear();
+
+    const oversizedRequests = [
+      { route: "/x402/search", query: { provider: overLimitProvider, q: "stellar" } },
+      { route: "/x402/search", query: { provider: "search.basic", q: overLimitQuery } },
+      { route: "/x402/news", query: { provider: overLimitProvider, q: "payments" } },
+      { route: "/x402/news", query: { provider: "news.fast", q: overLimitQuery } },
+      { route: "/x402/scrape", query: { provider: overLimitProvider, url: "https://example.com" } },
+      { route: "/x402/scrape", query: { provider: "scrape.page", url: overLimitUrl } }
+    ];
+
+    for (const reqCase of oversizedRequests) {
+      const response = await request(app).get(reqCase.route).query(reqCase.query);
+      expect(response.status).toBe(400);
+      expect(response.body.errorCode).toBe("invalid_query");
+    }
+
+    expect(executeQueryMock).not.toHaveBeenCalled();
   });
 
   it("handles provider timeout and returns provider_timeout", async () => {

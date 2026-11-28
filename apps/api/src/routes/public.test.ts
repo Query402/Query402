@@ -4,6 +4,7 @@ import { providerCapabilitySchema } from "@query402/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildPaidQueryFixture, buildTestUsageEvent } from "../test/storage-test-helpers.js";
 import { applyApiTestEnv, resetApiTestStorage } from "../test/api-test-helpers.js";
+import { MAX_USAGE_OFFSET } from "../lib/storage/constants.js";
 
 describe("public routes", () => {
   let analyticsDbPath: string;
@@ -600,6 +601,49 @@ describe("public routes", () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+      expect(response.body.error.fieldErrors?.offset?.length).toBeGreaterThan(0);
+    });
+
+    it("accepts /api/usage offset at 0 and MAX_USAGE_OFFSET", async () => {
+      const app = await createPublicApp();
+
+      const zeroResponse = await request(app).get("/api/usage?offset=0");
+      expect(zeroResponse.status).toBe(200);
+      expect(zeroResponse.body.pagination.offset).toBe(0);
+
+      const maxResponse = await request(app).get(`/api/usage?offset=${MAX_USAGE_OFFSET}`);
+      expect(maxResponse.status).toBe(200);
+      expect(maxResponse.body.pagination.offset).toBe(MAX_USAGE_OFFSET);
+    });
+
+    it("rejects /api/usage offset above MAX_USAGE_OFFSET with 400 validation payload", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get(`/api/usage?offset=${MAX_USAGE_OFFSET + 1}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error.fieldErrors?.offset?.length).toBeGreaterThan(0);
+    });
+
+    it.each(["1.5", "abc"])(
+      "rejects non-integer /api/usage offset (%s) with 400 validation payload",
+      async (badOffset) => {
+        const app = await createPublicApp();
+        const response = await request(app).get(`/api/usage?offset=${badOffset}`);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBeDefined();
+        expect(response.body.error.fieldErrors?.offset?.length).toBeGreaterThan(0);
+      }
+    );
+
+    it("rejects repeated /api/usage offset parameters with 400 validation payload", async () => {
+      const app = await createPublicApp();
+      const response = await request(app).get("/api/usage?offset=1&offset=2");
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error.fieldErrors?.offset?.length).toBeGreaterThan(0);
     });
 
     it("rejects /api/usage limit above documented maximum with 400", async () => {
