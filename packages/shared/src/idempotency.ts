@@ -2,10 +2,10 @@ import type { QueryMode } from "./types.js";
 
 /**
  * Single source of truth for the maximum accepted `Idempotency-Key` length.
- * The limit applies to the trimmed header value (in UTF-16 code units).
- * Documented in `docs/idempotency.md`.
+ * The limit applies to the raw header value as received, measured in UTF-8
+ * bytes before trimming. Documented in `docs/idempotency.md`.
  */
-export const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+export const MAX_IDEMPOTENCY_KEY_BYTES = 128;
 
 /** Stable error code for an empty, repeated, or oversized `Idempotency-Key`. */
 export const INVALID_IDEMPOTENCY_KEY_ERROR = "invalid_idempotency_key";

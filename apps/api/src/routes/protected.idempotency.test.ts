@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MAX_IDEMPOTENCY_KEY_LENGTH } from "@query402/shared";
+import { MAX_IDEMPOTENCY_KEY_BYTES } from "@query402/shared";
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -94,9 +94,9 @@ describe("x402 idempotency", () => {
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts an idempotency key at the documented maximum length", async () => {
+  it("accepts an idempotency key at the documented maximum byte length", async () => {
     const app = await createTestApp();
-    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH);
+    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES);
 
     const first = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
     expect(first.status).toBe(200);
@@ -107,9 +107,9 @@ describe("x402 idempotency", () => {
     expect(executeQueryMock).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects an idempotency key one character over the maximum before provider work", async () => {
+  it("rejects an idempotency key one byte over the maximum before provider work", async () => {
     const app = await createTestApp();
-    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
+    const idempotencyKey = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1);
 
     const response = await demoPaidRequest(app).set("Idempotency-Key", idempotencyKey);
 

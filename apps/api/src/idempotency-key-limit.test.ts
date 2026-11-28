@@ -1,4 +1,4 @@
-import { MAX_IDEMPOTENCY_KEY_LENGTH } from "@query402/shared";
+import { MAX_IDEMPOTENCY_KEY_BYTES } from "@query402/shared";
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +25,7 @@ describe("Idempotency-Key header limit", () => {
     const response = await request(app)
       .get("/x402/search")
       .query({ provider: "search.basic", q: "test query" })
-      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH + 1));
+      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1));
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
@@ -42,7 +42,7 @@ describe("Idempotency-Key header limit", () => {
     const response = await request(app)
       .get("/x402/search")
       .query({ provider: "search.basic", q: "test query" })
-      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH));
+      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES));
 
     expect(response.status).toBe(402);
     expect(response.body.errorCode).toBe("payment_required");
@@ -56,10 +56,21 @@ describe("Idempotency-Key header limit", () => {
 
     const response = await request(app)
       .post("/api/sponsorship/grants")
-      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH + 1))
+      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1))
       .send({});
 
     expect(response.status).toBe(400);
     expect(response.body.errorCode).toBe("invalid_idempotency_key");
+  });
+
+  it("leaves routes that do not consume the header unaffected", async () => {
+    const { app } = await import("./app.js");
+
+    const response = await request(app)
+      .get("/health")
+      .set("Idempotency-Key", "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1));
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
   });
 });

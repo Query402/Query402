@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { MAX_IDEMPOTENCY_KEY_LENGTH } from "@query402/shared";
+import { MAX_IDEMPOTENCY_KEY_BYTES } from "@query402/shared";
 import { describe, expect, it } from "vitest";
 import { INVALID_IDEMPOTENCY_KEY_BODY, validateIdempotencyKey } from "./key.js";
 
@@ -25,8 +25,8 @@ describe("Idempotency-Key validation", () => {
     });
   });
 
-  it("accepts a key of exactly the documented maximum length", () => {
-    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH);
+  it("accepts a key of exactly the documented maximum byte length", () => {
+    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES);
 
     expect(validateIdempotencyKey(requestWithHeaders([["Idempotency-Key", key]]))).toEqual({
       valid: true,
@@ -34,8 +34,8 @@ describe("Idempotency-Key validation", () => {
     });
   });
 
-  it("rejects a key one character over the documented maximum length", () => {
-    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
+  it("rejects a key one byte over the documented maximum length", () => {
+    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1);
 
     expect(validateIdempotencyKey(requestWithHeaders([["Idempotency-Key", key]]))).toEqual({
       valid: false,
@@ -43,8 +43,34 @@ describe("Idempotency-Key validation", () => {
     });
   });
 
-  it("measures the trimmed value against the maximum length", () => {
-    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_LENGTH);
+  it("measures the limit in bytes, not JavaScript code units", () => {
+    // U+00E9 is two UTF-8 bytes, so this is exactly at the byte limit while
+    // being half the limit in UTF-16 code units.
+    const atLimit = "\u00e9".repeat(MAX_IDEMPOTENCY_KEY_BYTES / 2);
+    expect(validateIdempotencyKey(requestWithHeaders([["Idempotency-Key", atLimit]]))).toEqual({
+      valid: true,
+      key: atLimit
+    });
+
+    const overLimit = "\u00e9".repeat(MAX_IDEMPOTENCY_KEY_BYTES / 2 + 1);
+    expect(validateIdempotencyKey(requestWithHeaders([["Idempotency-Key", overLimit]]))).toEqual({
+      valid: false,
+      key: undefined
+    });
+  });
+
+  it("enforces the wire length before trimming", () => {
+    // The trimmed value fits, but the value as received is over the byte limit.
+    const padded = `  ${"k".repeat(MAX_IDEMPOTENCY_KEY_BYTES)}  `;
+
+    expect(validateIdempotencyKey(requestWithHeaders([["Idempotency-Key", padded]]))).toEqual({
+      valid: false,
+      key: undefined
+    });
+  });
+
+  it("trims surrounding whitespace when the raw value is within the byte limit", () => {
+    const key = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES - 4);
 
     expect(validateIdempotencyKey(requestWithHeaders([["idempotency-key", `  ${key}  `]]))).toEqual(
       { valid: true, key }

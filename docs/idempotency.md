@@ -12,7 +12,7 @@ Idempotency-Key: <uuid>
 
 Clients generate a UUID per logical request and **reuse the same key** on safe retries (network blip, timeout). Generate a **new** key when inputs change.
 
-The header is optional. When present, the trimmed value must be non-empty and at most **128 characters** (`MAX_IDEMPOTENCY_KEY_LENGTH` in `@query402/shared`; UUID keys are 36 characters). Empty, repeated, or oversized headers are rejected with `400 invalid_idempotency_key` before any idempotency storage, payment settlement, or provider work.
+The header is optional. When present, the value as received must be at most **128 bytes** (`MAX_IDEMPOTENCY_KEY_BYTES` in `@query402/shared`; UUID keys are 36 bytes), and its trimmed value must be non-empty. The byte limit is checked on the wire value before trimming, on the paid routes that consume the header (`GET /x402/search`, `/x402/news`, `/x402/scrape`, `POST /api/paid/run`) and on grant issuance (`POST /api/sponsorship/grants`); other routes ignore the header. Empty, repeated, or oversized headers on those routes are rejected with `400 invalid_idempotency_key` before any idempotency storage, payment settlement, or provider work.
 
 ## Fingerprint binding
 
