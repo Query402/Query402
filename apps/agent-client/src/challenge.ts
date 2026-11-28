@@ -30,20 +30,16 @@ export interface ChallengeMismatch {
 export type ChallengeValidationResult =
   { ok: true; requirements: PaymentRequirements } | { ok: false; mismatch: ChallengeMismatch };
 
-/** Stellar assets, including USDC, are quoted in 7-decimal token units. */
-export const STELLAR_TOKEN_DECIMALS = 7;
-
 /**
- * Amounts are quoted in asset smallest units (Stellar tokens have 7 decimals).
- * This must match the units `convertToTokenAmount` produces when the CLI builds
- * its own quote, otherwise every challenge looks 10x cheaper than it is.
+ * Amounts are quoted in asset smallest units (USDC has 6 decimals). Compare
+ * with integer math to stay float-safe.
  */
 export function parseAmountToUsd(amount: string): number | null {
   if (!/^\d+(\.\d+)?$/.test(amount.trim())) {
     return null;
   }
   const parsed = Number(amount);
-  return Number.isFinite(parsed) ? parsed / 10 ** STELLAR_TOKEN_DECIMALS : null;
+  return Number.isFinite(parsed) ? parsed / 1_000_000 : null;
 }
 
 function resourceProvider(challenge: PaymentRequired): string | null {

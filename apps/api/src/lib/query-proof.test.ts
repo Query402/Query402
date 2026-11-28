@@ -12,13 +12,7 @@ vi.mock("../services/query-service.js", () => ({
   ProviderFailedError: class ProviderFailedError extends Error {}
 }));
 
-function proof(input: {
-  provider: string;
-  target: string;
-  price: string;
-  asset?: string;
-  amount?: string;
-}) {
+function proof(input: { provider: string; target: string; price: string; asset?: string; amount?: string }) {
   return JSON.stringify({
     digest: queryCoverageDigest({
       provider: input.provider,

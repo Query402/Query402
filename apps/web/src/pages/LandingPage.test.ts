@@ -27,7 +27,10 @@ registerHooks({
   }
 });
 
-const landingSource = readFileSync(new URL("./LandingPage.tsx", import.meta.url), "utf8");
+const landingSource = readFileSync(
+  new URL("./LandingPage.tsx", import.meta.url),
+  "utf8"
+);
 
 const PROTECTED_ENDPOINTS = [
   "/x402/",
@@ -160,6 +163,10 @@ describe("LandingPage - renders without a wallet or payment client", () => {
       false,
       "Landing page must not render a submit button"
     );
-    assert.equal(/<form/.test(html), false, "Landing page must not render a form");
+    assert.equal(
+      /<form/.test(html),
+      false,
+      "Landing page must not render a form"
+    );
   });
 });

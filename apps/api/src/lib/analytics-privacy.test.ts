@@ -100,9 +100,7 @@ describe("analytics-privacy", () => {
     });
 
     it("should return null for missing required fields", () => {
-      const encoded = Buffer.from(JSON.stringify({ timestamp: "2024-01-15T10:00:00Z" })).toString(
-        "base64"
-      );
+      const encoded = Buffer.from(JSON.stringify({ timestamp: "2024-01-15T10:00:00Z" })).toString("base64");
       expect(decodeCursor(encoded)).toBeNull();
     });
 
@@ -154,7 +152,9 @@ describe("analytics-privacy", () => {
     });
 
     it("should handle single record", () => {
-      const records = [{ createdAt: "2024-01-15T10:00:00Z", id: "use_1" }];
+      const records = [
+        { createdAt: "2024-01-15T10:00:00Z", id: "use_1" }
+      ];
 
       const cursor = generateNextCursor(records);
 
@@ -164,7 +164,9 @@ describe("analytics-privacy", () => {
     });
 
     it("should generate decodable cursor", () => {
-      const records = [{ createdAt: "2024-01-15T10:00:00Z", id: "use_abc" }];
+      const records = [
+        { createdAt: "2024-01-15T10:00:00Z", id: "use_abc" }
+      ];
 
       const cursor = generateNextCursor(records);
       const decoded = decodeCursor(cursor!);

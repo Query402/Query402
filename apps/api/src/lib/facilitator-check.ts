@@ -37,12 +37,7 @@ export function assertFacilitatorConfirmsPrice(input: {
 }): void {
   const priced = pricedPaymentForProvider(input.providerId);
   const result = input.facilitatorResult;
-  if (
-    !result?.asset ||
-    result.amount === undefined ||
-    result.amount === "" ||
-    !result.destination
-  ) {
+  if (!result?.asset || result.amount === undefined || result.amount === "" || !result.destination) {
     throw new FacilitatorPaymentError();
   }
 

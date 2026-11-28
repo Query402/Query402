@@ -1,9 +1,4 @@
-import {
-  ProviderAdapter,
-  ProviderRegistry,
-  AdapterExecutionResult,
-  PaidQueryContext
-} from "./core.js";
+import { ProviderAdapter, ProviderRegistry, AdapterExecutionResult, PaidQueryContext } from "./core.js";
 import {
   assertPriceMatch,
   buildChallengeAmountUnits,
@@ -125,7 +120,8 @@ export class DefaultProviderRegistry implements ProviderRegistry {
     if (!Number.isSafeInteger(catalogUnits)) {
       throw new UnsafePriceError(catalogUnits);
     }
-    const effectiveChallengeUnits = challengeAmountUnits ?? buildChallengeAmountUnits(providerId);
+    const effectiveChallengeUnits =
+      challengeAmountUnits ?? buildChallengeAmountUnits(providerId);
     assertPriceMatch(effectiveChallengeUnits, catalogUnits);
 
     const adapter = this.adapters.get(providerId);

@@ -84,7 +84,8 @@ function inspectResolvedSource(
   }
 
   const isNpmRegistry =
-    sourceUrl.hostname === NPM_REGISTRY_HOST && (sourceUrl.port === "" || sourceUrl.port === "443");
+    sourceUrl.hostname === NPM_REGISTRY_HOST &&
+    (sourceUrl.port === "" || sourceUrl.port === "443");
   if (!isNpmRegistry && !allowlistedHosts.has(sourceUrl.hostname)) {
     addViolation(violations, packagePath, "resolved", "unreviewed-host");
   }
@@ -102,10 +103,11 @@ export function findSourceViolations(lockfile, { allowlistedHosts = ALLOWLISTED_
     : [];
   const workspacePaths = new Set(
     packageEntries
-      .filter(([packagePath, packageInfo]) =>
-        packagePath && !packagePath.startsWith("node_modules/") && packageInfo?.name
-          ? matchesWorkspacePattern(packagePath, workspacePatterns)
-          : false
+      .filter(
+        ([packagePath, packageInfo]) =>
+          packagePath && !packagePath.startsWith("node_modules/") && packageInfo?.name
+            ? matchesWorkspacePattern(packagePath, workspacePatterns)
+            : false
       )
       .map(([packagePath]) => packagePath)
   );
@@ -117,7 +119,10 @@ export function findSourceViolations(lockfile, { allowlistedHosts = ALLOWLISTED_
     }
 
     if (packageInfo.link === true) {
-      if (typeof packageInfo.resolved === "string" && workspacePaths.has(packageInfo.resolved)) {
+      if (
+        typeof packageInfo.resolved === "string" &&
+        workspacePaths.has(packageInfo.resolved)
+      ) {
         continue;
       }
       addViolation(violations, packagePath || ".", "link", "unrecognized-link-target");
@@ -170,7 +175,8 @@ async function main() {
   }
 }
 
-const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+const isMain =
+  process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) {
   main().catch((error) => {
     console.error(error.message);
