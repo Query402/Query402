@@ -132,19 +132,33 @@ app.use(
 
       callback(new Error(`CORS blocked for origin: ${origin}`));
     },
-    exposedHeaders: ["payment-required", "payment-response", "x-payment-response"]
+    exposedHeaders: [
+      "payment-required",
+      "payment-response",
+      "x-payment-response",
+      REQUEST_ID_HEADER
+    ]
   })
 );
 app.use(securityHeaders());
+app.use(createRequestIdMiddleware());
 app.use(express.json({ limit: config.API_JSON_BODY_MAX_BYTES }));
 export function logApiRequest(
   req: express.Request,
-  _res: express.Response,
+  res: express.Response,
   next: express.NextFunction
 ) {
   // `req.url` includes the query string. Paid queries and scrape targets are
   // user-controlled and must not be copied into application logs.
-  logger.info({ method: req.method, path: req.path }, "incoming request");
+  logger.info(
+    {
+      requestId: res.locals.requestId,
+      requestIdSource: res.locals.requestIdSource,
+      method: req.method,
+      path: req.path
+    },
+    "incoming request"
+  );
   next();
 }
 
